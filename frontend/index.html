@@ -9,14 +9,13 @@
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg-void: #0d0f18;
-            --jrpg-gold: #facc15;
+            --bg-void: #050508;
+            --jrpg-gold: #fbbf24;
             --jrpg-red: #ef4444;
             --jrpg-green: #22c55e;
-            --jrpg-blue: #3b82f6;
-            --panel-border: #475569;
+            --jrpg-blue: #38bdf8;
+            --hud-bg: #0f172a;
         }
-
         * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
         body {
             background-color: var(--bg-void);
@@ -26,458 +25,398 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            padding: 20px;
+            justify-content: center;
+            padding: 16px;
             overflow-x: hidden;
         }
-
-        /* 頂部經典 JRPG 狀態列 */
-        .hud-bar {
+        .hud-top {
             width: 100%;
-            max-width: 900px;
-            background: #1e293b;
+            max-width: 860px;
+            background: var(--hud-bg);
             border: 4px solid #fff;
-            box-shadow: 0 6px 0 #0f172a;
+            box-shadow: 0 6px 0 #000;
             padding: 12px 18px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 20px;
-            font-size: 11px;
+            font-size: 10px;
             line-height: 1.8;
+            margin-bottom: 16px;
         }
-        .burn-alert {
-            color: var(--jrpg-red);
-            text-shadow: 0 0 8px var(--jrpg-red);
-        }
-
-        /* 戰鬥舞台 Canvas 容器 */
-        .arena-container {
+        .battle-arena {
             width: 100%;
-            max-width: 900px;
-            height: 340px;
-            background: linear-gradient(180deg, #111827 0%, #1e1b4b 60%, #311042 100%);
+            max-width: 860px;
+            height: 380px;
             border: 4px solid #fff;
             box-shadow: 0 8px 0 #000;
             position: relative;
             overflow: hidden;
-            border-radius: 4px;
+            background: linear-gradient(180deg, #020617 0%, #172554 60%, #451a03 100%);
         }
-        #battleCanvas {
-            width: 100%;
-            height: 100%;
-            display: block;
+        .moon {
+            position: absolute;
+            top: 25px;
+            right: 60px;
+            width: 64px;
+            height: 64px;
+            border-radius: 50%;
+            background: #f97316;
+            box-shadow: 0 0 35px #f97316;
+            border: 4px solid #ea580c;
         }
-
-        /* JRPG 經典戰鬥選單與資訊框 */
-        .ui-dock {
+        .floor {
+            position: absolute;
+            bottom: 0;
             width: 100%;
-            max-width: 900px;
+            height: 70px;
+            background: #1c1917;
+            border-top: 4px solid #78716c;
+            background-image: radial-gradient(#292524 15%, transparent 16%), radial-gradient(#44403c 15%, transparent 16%);
+            background-size: 16px 16px;
+            background-position: 0 0, 8px 8px;
+        }
+        .entity {
+            position: absolute;
+            bottom: 60px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            transition: all 0.2s cubic-bezier(0.18, 0.89, 0.32, 1.28);
+        }
+        #hero { left: 80px; z-index: 10; }
+        .zombie-team {
+            position: absolute;
+            right: 70px;
+            bottom: 60px;
+            display: flex;
+            gap: 25px;
+            z-index: 10;
+        }
+        .zombie-unit {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            transition: all 0.3s ease;
+        }
+        .paladin-sprite {
+            width: 80px;
+            height: 96px;
+            position: relative;
+            animation: breathe 1.2s infinite alternate ease-in-out;
+            transform-origin: bottom center;
+        }
+        @keyframes breathe {
+            0% { transform: translateY(0) scaleY(1); }
+            100% { transform: translateY(-4px) scaleY(1.03); }
+        }
+        .zombie-sprite {
+            width: 72px;
+            height: 86px;
+            position: relative;
+            animation: zombieHop 1.4s infinite alternate ease-in-out;
+            transform-origin: bottom center;
+        }
+        @keyframes zombieHop {
+            0% { transform: translateY(0) rotate(-1deg); }
+            100% { transform: translateY(-5px) rotate(2deg); }
+        }
+        .hero-charge {
+            transform: translateX(380px) scale(1.2) !important;
+        }
+        .crit-slash {
+            position: absolute;
+            width: 140px;
+            height: 140px;
+            pointer-events: none;
+            display: none;
+            z-index: 30;
+            background: radial-gradient(circle, rgba(251,191,36,0.9) 0%, rgba(239,68,68,0) 70%);
+            border-radius: 50%;
+        }
+        .dmg-popup {
+            position: absolute;
+            font-size: 13px;
+            color: var(--jrpg-gold);
+            text-shadow: 2px 2px 0 #000, 0 0 10px var(--jrpg-gold);
+            pointer-events: none;
+            animation: floatUp 0.8s forwards;
+            z-index: 40;
+        }
+        @keyframes floatUp {
+            0% { transform: translateY(0) scale(0.6); opacity: 0; }
+            40% { transform: translateY(-30px) scale(1.3); opacity: 1; }
+            100% { transform: translateY(-60px) scale(1); opacity: 0; }
+        }
+        .shake {
+            animation: screenShake 0.3s cubic-bezier(.36,.07,.19,.97) both;
+        }
+        @keyframes screenShake {
+            10%, 90% { transform: translate3d(-3px, 0, 0); }
+            20%, 80% { transform: translate3d(5px, 0, 0); }
+            30%, 50%, 70% { transform: translate3d(-8px, 0, 0); }
+            40%, 60% { transform: translate3d(8px, 0, 0); }
+        }
+        .dock {
+            width: 100%;
+            max-width: 860px;
             display: grid;
             grid-template-columns: 1.4fr 1fr;
             gap: 16px;
-            margin-top: 20px;
+            margin-top: 16px;
         }
-
-        .dialog-box {
-            background: #020617;
-            border: 4px solid #fff;
-            box-shadow: 0 6px 0 #000;
-            padding: 16px;
-            min-height: 170px;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-        }
-        .dialog-title {
-            font-size: 10px;
-            color: var(--jrpg-gold);
-            margin-bottom: 8px;
-            border-bottom: 2px dashed #334155;
-            padding-bottom: 6px;
-        }
-        .dialog-logs {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 11px;
-            color: #94a3b8;
-            flex: 1;
-            overflow-y: auto;
-            max-height: 100px;
-            line-height: 1.6;
-        }
-
-        .cmd-box {
+        .dialogue-panel {
             background: #020617;
             border: 4px solid #fff;
             box-shadow: 0 6px 0 #000;
             padding: 14px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            height: 150px;
+            overflow-y: auto;
+            color: #94a3b8;
+            line-height: 1.6;
+        }
+        .cmd-panel {
+            background: #020617;
+            border: 4px solid #fff;
+            box-shadow: 0 6px 0 #000;
+            padding: 12px;
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 10px;
         }
-        .cmd-btn {
+        .btn-jrpg {
             background: #1e293b;
-            border: 2px solid #64748b;
+            border: 3px solid #64748b;
             color: #fff;
             font-family: 'Press Start 2P', monospace;
             font-size: 9px;
-            padding: 10px 6px;
+            padding: 10px 4px;
             cursor: pointer;
-            text-align: center;
             transition: all 0.1s;
         }
-        .cmd-btn:hover {
+        .btn-jrpg:hover {
             background: var(--jrpg-gold);
             color: #000;
             border-color: #fff;
-            transform: scale(1.05);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 0 #fff;
         }
-        .cmd-btn:active {
-            transform: scale(0.95);
-        }
-
-        /* 屏幕震動效果 */
-        .screen-shake {
-            animation: shake 0.35s cubic-bezier(.36,.07,.19,.97) both;
-        }
-        @keyframes shake {
-            10%, 90% { transform: translate3d(-2px, 0, 0); }
-            20%, 80% { transform: translate3d(4px, 0, 0); }
-            30%, 50%, 70% { transform: translate3d(-6px, 0, 0); }
-            40%, 60% { transform: translate3d(6px, 0, 0); }
+        .btn-jrpg:active {
+            transform: translateY(2px);
+            box-shadow: none;
         }
     </style>
 </head>
 <body>
-
-    <!-- 頂部 HUD -->
-    <div class="hud-bar">
+    <div class="hud-top">
         <div>
-            <div>🎃 PUMPKIN PALADIN: LV.99</div>
-            <div style="color: var(--jrpg-green); margin-top: 4px;">IDLE COST: $0.000/HR</div>
+            <div style="color: var(--jrpg-gold);">🎃 PALADIN: LV.99 [DIVINE]</div>
+            <div style="color: var(--jrpg-green); margin-top: 4px;">IDLE ARCH: $0.000 / HR</div>
         </div>
         <div style="text-align: right;">
-            <div id="burnHud" class="burn-alert">BURN DEFICIT: $0.096/HR</div>
-            <div style="color: #94a3b8; margin-top: 4px;" id="zombieCountHud">ROGUE INSTANCES: 1</div>
+            <div id="hudBurn" style="color: var(--jrpg-red);">BURN DEFICIT: $0.096 / HR</div>
+            <div id="hudZombies" style="color: #94a3b8; margin-top: 4px;">ROGUE ENTITIES: 1</div>
         </div>
     </div>
-
-    <!-- JRPG 戰鬥舞台 -->
-    <div class="arena-container" id="arenaBox">
-        <canvas id="battleCanvas"></canvas>
-    </div>
-
-    <!-- 下方操作台與戰鬥對話框 -->
-    <div class="ui-dock">
-        <!-- 戰鬥日誌 (JRPG 敘事風格) -->
-        <div class="dialog-box">
-            <div>
-                <div class="dialog-title">⚔️ BATTLE TELEMETRY // REAL-TIME LOG</div>
-                <div class="dialog-logs" id="logFeed">
-                    <div>[SYS] CloudTrail scanned: Rogue EC2 Zombie detected!</div>
-                    <div style="color: var(--jrpg-red);">[ALERT] Zombie is burning $0.096/hr idle resources!</div>
+    <div class="battle-arena" id="arena">
+        <div class="moon"></div>
+        <div class="floor"></div>
+        <div class="entity" id="hero">
+            <div style="font-size: 8px; color: var(--jrpg-gold); margin-bottom: 4px;">AEGIS</div>
+            <svg class="paladin-sprite" viewBox="0 0 40 48" fill="none">
+                <path d="M12 20 L4 44 L18 42 Z" fill="#991b1b" />
+                <rect x="14" y="22" width="14" height="16" fill="#fbbf24" stroke="#b45309" stroke-width="1.5" />
+                <rect x="18" y="26" width="6" height="8" fill="#38bdf8" />
+                <rect x="6" y="24" width="4" height="4" fill="#fbbf24" />
+                <path d="M4 24 L-2 4 L0 2 L8 22 Z" fill="#f8fafc" stroke="#94a3b8" stroke-width="1" />
+                <rect x="10" y="6" width="22" height="16" rx="4" fill="#ea580c" stroke="#9a3412" stroke-width="1.5" />
+                <rect x="19" y="2" width="4" height="5" fill="#15803d" />
+                <polygon points="14,11 17,11 15,14" fill="#020617" />
+                <polygon points="25,11 28,11 27,14" fill="#020617" />
+                <polygon points="16,17 19,19 22,17 25,19 27,17 22,21" fill="#020617" />
+                <rect x="15" y="38" width="4" height="6" fill="#78350f" />
+                <rect x="23" y="38" width="4" height="6" fill="#78350f" />
+            </svg>
+        </div>
+        <div class="zombie-team" id="zombieTeam">
+            <div class="zombie-unit" id="z-unit-1">
+                <div style="font-size: 7px; color: #fca5a5; margin-bottom: 4px;">EC2:ZOMBIE</div>
+                <div style="width: 44px; height: 5px; background: #ef4444; border: 1px solid #fff; margin-bottom: 4px;">
+                    <div style="width: 100%; height: 100%; background: #22c55e;"></div>
                 </div>
-            </div>
-            <div style="font-size: 8px; color: #64748b; margin-top: 8px;">
-                HOOK: Aegis Smite Pre-commit Active | Spec: Zero-Idle RFC
+                <svg class="zombie-sprite" viewBox="0 0 40 48" fill="none">
+                    <rect x="14" y="22" width="14" height="16" fill="#374151" stroke="#1f2937" stroke-width="1.5" />
+                    <rect x="4" y="24" width="12" height="5" fill="#15803d" />
+                    <rect x="12" y="8" width="18" height="15" rx="3" fill="#16a34a" stroke="#14532d" stroke-width="1.5" />
+                    <rect x="15" y="12" width="3" height="3" fill="#ef4444" />
+                    <rect x="24" y="12" width="3" height="3" fill="#ef4444" />
+                    <polygon points="16,18 26,17 23,21 18,21" fill="#020617" />
+                    <rect x="15" y="38" width="4" height="6" fill="#1f2937" />
+                    <rect x="23" y="38" width="4" height="6" fill="#1f2937" />
+                </svg>
             </div>
         </div>
-
-        <!-- 戰鬥指令按鈕 -->
-        <div class="cmd-box">
-            <button class="cmd-btn" style="border-color: var(--jrpg-gold);" onclick="heroSmite()">⚔️ SMITE</button>
-            <button class="cmd-btn" style="border-color: var(--jrpg-red);" onclick="heroSmiteAll()">🔥 ALL SMITE</button>
-            <button class="cmd-btn" style="border-color: var(--jrpg-blue);" onclick="heroReconcile()">📜 RECONCILE</button>
-            <button class="cmd-btn" style="border-color: var(--jrpg-green);" onclick="spawnZombieEnemy()">🧟 SUMMON</button>
+        <div class="crit-slash" id="critFx"></div>
+    </div>
+    <div class="dock">
+        <div class="dialogue-panel" id="logBox">
+            <div style="color: var(--jrpg-gold);">> SKELETON CREW INITIATED.</div>
+            <div>> CloudTrail scan: Rogue EC2 Zombie detected ($0.096/hr).</div>
+            <div>> Pre-commit Hook: Aegis Smite standing by.</div>
+        </div>
+        <div class="cmd-panel">
+            <button class="btn-jrpg" style="border-color: var(--jrpg-gold);" onclick="castSmite()">⚔️ SMITE</button>
+            <button class="btn-jrpg" style="border-color: var(--jrpg-red);" onclick="castAllSmite()">🔥 ALL SMITE</button>
+            <button class="btn-jrpg" style="border-color: var(--jrpg-blue);" onclick="castReconcile()">📜 RECONCILE</button>
+            <button class="btn-jrpg" style="border-color: var(--jrpg-green);" onclick="spawnZombie()">🧟 SUMMON</button>
         </div>
     </div>
-
     <script>
-        const canvas = document.getElementById('battleCanvas');
-        const ctx = canvas.getContext('2d');
-        const arena = document.getElementById('arenaBox');
-
-        function resizeCanvas() {
-            canvas.width = arena.clientWidth;
-            canvas.height = arena.clientHeight;
-        }
-        window.addEventListener('resize', resizeCanvas);
-        resizeCanvas();
-
-        // 戰鬥狀態
-        let paladin = { x: 100, y: 190, baseX: 100, state: 'idle', frame: 0, slashTime: 0 };
-        let zombies = [
-            { id: 1, name: 'EC2:Zombie-01', x: 620, y: 190, hp: 100, cost: 0.096, dead: false, alpha: 1 }
-        ];
-        let damageTexts = [];
-        let particles = [];
-        let burnTotal = 0.096;
-
-        // 浮動傷害數字
-        class DamageText {
-            constructor(x, y, text, color) {
-                this.x = x;
-                this.y = y;
-                this.text = text;
-                this.color = color;
-                this.alpha = 1;
-                this.vy = -2;
-            }
-            update() {
-                this.y += this.vy;
-                this.alpha -= 0.02;
-            }
-            draw() {
-                ctx.save();
-                ctx.globalAlpha = Math.max(0, this.alpha);
-                ctx.fillStyle = this.color;
-                ctx.font = '10px "Press Start 2P"';
-                ctx.fillText(this.text, this.x, this.y);
-                ctx.restore();
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        function playSfx(type) {
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            if (type === 'slash') {
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(440, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(110, audioCtx.currentTime + 0.15);
+                gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.15);
+            } else if (type === 'crit') {
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(880, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(220, audioCtx.currentTime + 0.25);
+                gain.gain.setValueAtTime(0.4, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.25);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.25);
             }
         }
+        const arena = document.getElementById('arena');
+        const hero = document.getElementById('hero');
+        const team = document.getElementById('zombieTeam');
+        const critFx = document.getElementById('critFx');
+        const logBox = document.getElementById('logBox');
+        let zombies = [{ id: 1 }];
+        let serial = 1;
 
-        // 金色爆發粒子
-        class Spark {
-            constructor(x, y, color) {
-                this.x = x;
-                this.y = y;
-                this.color = color;
-                this.vx = (Math.random() - 0.5) * 12;
-                this.vy = (Math.random() - 0.5) * 12;
-                this.alpha = 1;
-            }
-            update() {
-                this.x += this.vx;
-                this.y += this.vy;
-                this.alpha -= 0.03;
-            }
-            draw() {
-                ctx.save();
-                ctx.globalAlpha = Math.max(0, this.alpha);
-                ctx.fillStyle = this.color;
-                ctx.fillRect(this.x, this.y, 4, 4);
-                ctx.restore();
-            }
-        }
-
-        // 繪製南瓜聖騎士 (像素 JRPG 風格)
-        function drawPaladin() {
-            ctx.save();
-            ctx.translate(paladin.x, paladin.y);
-
-            // 浮動呼吸
-            const bob = Math.sin(Date.now() / 200) * 3;
-
-            // 聖光光環
-            ctx.strokeStyle = 'rgba(250, 204, 21, 0.4)';
-            ctx.lineWidth = 3;
-            ctx.strokeRect(-18, -48 + bob, 36, 68);
-
-            // 身體盔甲
-            ctx.fillStyle = '#facc15';
-            ctx.fillRect(-12, -20 + bob, 24, 30);
-            ctx.fillStyle = '#3b82f6';
-            ctx.fillRect(-6, -14 + bob, 12, 14);
-
-            // 南瓜頭
-            ctx.fillStyle = '#ea580c';
-            ctx.fillRect(-16, -42 + bob, 32, 22);
-            // 南瓜眼與嘴
-            ctx.fillStyle = '#000';
-            ctx.fillRect(-10, -36 + bob, 6, 6);
-            ctx.fillRect(4, -36 + bob, 6, 6);
-            ctx.fillRect(-6, -26 + bob, 12, 4);
-
-            // 大劍
-            if (paladin.state === 'attack') {
-                ctx.fillStyle = '#fff';
-                ctx.fillRect(18, -30 + bob, 36, 8);
-                ctx.fillStyle = '#facc15';
-                ctx.fillRect(12, -34 + bob, 6, 16);
-            } else {
-                ctx.fillStyle = '#fff';
-                ctx.fillRect(-22, -30 + bob, 6, 32);
-            }
-
-            ctx.restore();
-        }
-
-        // 繪製雲端喪屍
-        function drawZombies() {
-            zombies.forEach((z, idx) => {
-                if (z.alpha <= 0) return;
-                ctx.save();
-                ctx.globalAlpha = z.alpha;
-                ctx.translate(z.x + (idx * 50), z.y);
-
-                const zBob = Math.sin((Date.now() + idx * 300) / 250) * 2;
-
-                // 喪屍名稱與血條
-                ctx.fillStyle = '#ef4444';
-                ctx.fillRect(-20, -45, 40, 6);
-                ctx.fillStyle = '#22c55e';
-                ctx.fillRect(-20, -45, (z.hp / 100) * 40, 6);
-
-                ctx.font = '7px "Press Start 2P"';
-                ctx.fillStyle = '#94a3b8';
-                ctx.fillText('ZOMBIE', -18, -52);
-
-                // 喪屍身體
-                ctx.fillStyle = '#047857';
-                ctx.fillRect(-10, -20 + zBob, 20, 28);
-                // 腐朽頭顱
-                ctx.fillStyle = '#10b981';
-                ctx.fillRect(-14, -38 + zBob, 28, 18);
-                // 紅色凶眼
-                ctx.fillStyle = '#ef4444';
-                ctx.fillRect(-8, -32 + zBob, 4, 4);
-                ctx.fillRect(4, -32 + zBob, 4, 4);
-
-                ctx.restore();
-            });
-        }
-
-        // 動畫主循環
-        function loop() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-            // 地面裝飾線
-            ctx.strokeStyle = '#475569';
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.moveTo(0, 230);
-            ctx.lineTo(canvas.width, 230);
-            ctx.stroke();
-
-            // 更新聖騎士衝刺
-            if (paladin.state === 'attack') {
-                paladin.x += (450 - paladin.x) * 0.25;
-                if (Math.abs(paladin.x - 450) < 10) {
-                    paladin.state = 'return';
-                }
-            } else if (paladin.state === 'return') {
-                paladin.x += (paladin.baseX - paladin.x) * 0.2;
-                if (Math.abs(paladin.x - paladin.baseX) < 2) {
-                    paladin.x = paladin.baseX;
-                    paladin.state = 'idle';
-                }
-            }
-
-            drawPaladin();
-            drawZombies();
-
-            // 粒子更新
-            for (let i = particles.length - 1; i >= 0; i--) {
-                particles[i].update();
-                particles[i].draw();
-                if (particles[i].alpha <= 0) particles.splice(i, 1);
-            }
-
-            // 飄字更新
-            for (let i = damageTexts.length - 1; i >= 0; i--) {
-                damageTexts[i].update();
-                damageTexts[i].draw();
-                if (damageTexts[i].alpha <= 0) damageTexts.splice(i, 1);
-            }
-
-            requestAnimationFrame(loop);
-        }
-        loop();
-
-        // 觸發震動
-        function triggerShake() {
-            arena.classList.add('screen-shake');
-            setTimeout(() => arena.classList.remove('screen-shake'), 350);
-        }
-
-        function addLog(text, color = '#94a3b8') {
-            const feed = document.getElementById('logFeed');
+        function addLog(msg, col = '#94a3b8') {
             const row = document.createElement('div');
-            row.style.color = color;
-            row.innerText = `[${new Date().toTimeString().split(' ')[0]}] ${text}`;
-            feed.prepend(row);
+            row.style.color = col;
+            row.innerText = `> ${msg}`;
+            logBox.prepend(row);
         }
-
-        function updateHUD() {
-            const activeZombies = zombies.filter(z => !z.dead).length;
-            burnTotal = activeZombies * 0.096;
-            document.getElementById('burnHud').innerText = `BURN DEFICIT: $${burnTotal.toFixed(3)}/HR`;
-            document.getElementById('zombieCountHud').innerText = `ROGUE INSTANCES: ${activeZombies}`;
+        function updateHud() {
+            const count = zombies.length;
+            const burn = count * 0.096;
+            document.getElementById('hudBurn').innerText = `BURN DEFICIT: $${burn.toFixed(3)} / HR`;
+            document.getElementById('hudZombies').innerText = `ROGUE ENTITIES: ${count}`;
         }
-
-        // 指令 1: 聖裁單體普攻
-        function heroSmite() {
-            const target = zombies.find(z => !z.dead);
-            if (!target) {
-                addLog('No rogue zombies detected. Sacred sanctuary is calm!', '#facc15');
+        function popupText(x, y, txt, col = '#fbbf24') {
+            const p = document.createElement('div');
+            p.className = 'dmg-popup';
+            p.style.left = `${x}px`;
+            p.style.top = `${y}px`;
+            p.style.color = col;
+            p.innerText = txt;
+            arena.appendChild(p);
+            setTimeout(() => p.remove(), 800);
+        }
+        function shakeArena() {
+            arena.classList.add('shake');
+            setTimeout(() => arena.classList.remove('shake'), 300);
+        }
+        function castSmite() {
+            if (zombies.length === 0) {
+                addLog('No zombies to smite! Sanctuary is safe.', '#fbbf24');
                 return;
             }
-            paladin.state = 'attack';
+            hero.classList.add('hero-charge');
             setTimeout(() => {
-                triggerShake();
-                target.hp = 0;
-                target.dead = true;
-                damageTexts.push(new DamageText(550, 160, '9999 SMITE!', '#facc15'));
-                for (let i = 0; i < 25; i++) particles.push(new Spark(580, 180, '#facc15'));
-                
-                // 消散漸變
-                let fade = setInterval(() => {
-                    target.alpha -= 0.1;
-                    if (target.alpha <= 0) {
-                        clearInterval(fade);
-                        updateHUD();
-                    }
-                }, 40);
-
-                addLog(`⚡ AEGIS SMITE: Terminated ${target.name}. Saved $0.096/hr!`, '#facc15');
+                playSfx('slash');
+                shakeArena();
+                const target = document.querySelector('.zombie-unit');
+                if (target) {
+                    const rect = target.getBoundingClientRect();
+                    const aRect = arena.getBoundingClientRect();
+                    critFx.style.left = `${rect.left - aRect.left - 30}px`;
+                    critFx.style.top = `${rect.top - aRect.top - 20}px`;
+                    critFx.style.display = 'block';
+                    setTimeout(() => critFx.style.display = 'none', 200);
+                    popupText(rect.left - aRect.left, rect.top - aRect.top, '9999 SMITE!');
+                    target.style.transform = 'scale(0) rotate(45deg)';
+                    target.style.opacity = '0';
+                    setTimeout(() => {
+                        target.remove();
+                        zombies.shift();
+                        updateHud();
+                    }, 250);
+                }
+                addLog('⚡ AEGIS SMITE: Rogue zombie terminated! Saved $0.096/hr.', '#fbbf24');
             }, 180);
+            setTimeout(() => hero.classList.remove('hero-charge'), 380);
         }
-
-        // 指令 2: 神聖風暴 全屏斬殺
-        function heroSmiteAll() {
-            const targets = zombies.filter(z => !z.dead);
-            if (targets.length === 0) {
-                addLog('Zero rogue entities. Realm is pristine!', '#22c55e');
+        function castAllSmite() {
+            if (zombies.length === 0) {
+                addLog('Zero rogue entities. Divine realm pure!', '#22c55e');
                 return;
             }
-            paladin.state = 'attack';
+            hero.classList.add('hero-charge');
             setTimeout(() => {
-                triggerShake();
-                targets.forEach((t, i) => {
-                    t.hp = 0;
-                    t.dead = true;
-                    damageTexts.push(new DamageText(500 + (i * 40), 150 - (i * 15), 'CRIT 9999!', '#ef4444'));
-                    for (let p = 0; p < 20; p++) particles.push(new Spark(550 + (i * 40), 180, '#ef4444'));
-                    t.alpha = 0;
+                playSfx('crit');
+                shakeArena();
+                const all = document.querySelectorAll('.zombie-unit');
+                all.forEach((z) => {
+                    const rect = z.getBoundingClientRect();
+                    const aRect = arena.getBoundingClientRect();
+                    popupText(rect.left - aRect.left, rect.top - aRect.top, 'CRIT 9999!', '#ef4444');
+                    z.style.transform = 'scale(0) rotate(-45deg)';
+                    z.style.opacity = '0';
+                    setTimeout(() => z.remove(), 250);
                 });
-                updateHUD();
-                addLog(`🔥 DIVINE SMITE ALL: Cleared ${targets.length} zombies. Zero-Idle restored!`, '#ef4444');
+                zombies = [];
+                updateHud();
+                addLog('🔥 HOLY STORM: All zombies incinerated! Idle rate $0.000 restored!', '#ef4444');
             }, 200);
+            setTimeout(() => hero.classList.remove('hero-charge'), 400);
         }
-
-        // 指令 3: 對帳法典結算
-        function heroReconcile() {
-            triggerShake();
-            damageTexts.push(new DamageText(120, 150, '+10 TX SETTLED', '#3b82f6'));
-            for (let i = 0; i < 20; i++) particles.push(new Spark(120, 180, '#3b82f6'));
-            addLog('📜 GrimReconciler: 10 transactions settled to DynamoDB (TTL 7-Day active).', '#3b82f6');
+        function castReconcile() {
+            playSfx('slash');
+            shakeArena();
+            popupText(100, 160, '+10 TX SETTLED', '#38bdf8');
+            addLog('📜 GrimReconciler: 10 transactions settled to DynamoDB (TTL 7-Day).', '#38bdf8');
         }
-
-        // 指令 4: 召喚浪費喪屍
-        function spawnZombieEnemy() {
-            const newId = zombies.length + 1;
-            zombies.push({
-                id: newId,
-                name: `EC2:Zombie-0${newId}`,
-                x: 550 + (Math.random() * 40),
-                y: 190,
-                hp: 100,
-                cost: 0.096,
-                dead: false,
-                alpha: 1
-            });
-            updateHUD();
-            addLog(`⚠️ UNBUDGETED SPAWN: Rogue EC2 Zombie appeared! Burn +$0.096/hr!`, '#ef4444');
+        function spawnZombie() {
+            serial++;
+            zombies.push({ id: serial });
+            const z = document.createElement('div');
+            z.className = 'zombie-unit';
+            z.id = `z-unit-${serial}`;
+            z.innerHTML = `
+                <div style="font-size: 7px; color: #fca5a5; margin-bottom: 4px;">RDS:ZOMBIE</div>
+                <div style="width: 44px; height: 5px; background: #ef4444; border: 1px solid #fff; margin-bottom: 4px;">
+                    <div style="width: 100%; height: 100%; background: #22c55e;"></div>
+                </div>
+                <svg class="zombie-sprite" viewBox="0 0 40 48" fill="none">
+                    <rect x="14" y="22" width="14" height="16" fill="#374151" stroke="#1f2937" stroke-width="1.5" />
+                    <rect x="4" y="24" width="12" height="5" fill="#15803d" />
+                    <rect x="12" y="8" width="18" height="15" rx="3" fill="#16a34a" stroke="#14532d" stroke-width="1.5" />
+                    <rect x="15" y="12" width="3" height="3" fill="#ef4444" />
+                    <rect x="24" y="12" width="3" height="3" fill="#ef4444" />
+                    <polygon points="16,18 26,17 23,21 18,21" fill="#020617" />
+                    <rect x="15" y="38" width="4" height="6" fill="#1f2937" />
+                    <rect x="23" y="38" width="4" height="6" fill="#1f2937" />
+                </svg>
+            `;
+            team.appendChild(z);
+            updateHud();
+            addLog(`⚠️ UNBUDGETED: Rogue Zombie #${serial} spawned! +$0.096/hr!`, '#ef4444');
         }
     </script>
 </body>
