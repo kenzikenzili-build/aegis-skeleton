@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AegisSkeleton Dashboard</title>
+    <style>
+        :root {
+            --bg-color: #0A0A0A;
+            --card-bg: #141414;
+            --border-color: rgba(255, 255, 255, 0.08);
+            --text-main: #FFFFFF;
+            --text-muted: #888888;
+            --accent-green: #00FF66;
+            --accent-red: #FF3366;
+        }
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 40px;
+            display: flex;
+            justify-content: center;
+        }
+        .bento-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+            max-width: 900px;
+            width: 100%;
+        }
+        .card {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 24px;
+            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+        }
+        .card:hover {
+            border-color: rgba(255, 255, 255, 0.2);
+            box-shadow: 0 0 15px rgba(255, 255, 255, 0.05);
+        }
+        .card-large { grid-column: span 2; }
+        h2 { font-size: 14px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; margin-top: 0; }
+        .data-point {
+            font-size: 32px;
+            font-weight: 500;
+            font-variant-numeric: tabular-nums;
+            margin: 10px 0 0 0;
+        }
+        .right-align { text-align: right; }
+        .status-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            background: rgba(0, 255, 102, 0.1);
+            color: var(--accent-green);
+        }
+        .test-btn {
+            background: transparent;
+            border: 1px solid var(--text-muted);
+            color: var(--text-main);
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            margin-top: 20px;
+            transition: border 0.2s;
+        }
+        .test-btn:hover { border-color: var(--accent-red); color: var(--accent-red); }
+    </style>
+</head>
+<body>
+    <div class="bento-grid">
+        <!-- 骨架核心區 -->
+        <div class="card card-large">
+            <h2>AegisSkeleton Core (Zero-Idle)</h2>
+            <div style="display: flex; justify-content: space-between; align-items: flex-end;">
+                <div>
+                    <span class="status-badge">● Ward Active</span>
+                    <p style="color: var(--text-muted); font-size: 14px; margin-top: 10px;">SQS -> Lambda -> DynamoDB</p>
+                </div>
+                <div class="right-align">
+                    <p class="data-point">0.000 <span style="font-size: 16px; color: var(--text-muted);">USD / hr</span></p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- App 1: 財務對帳 -->
+        <div class="card">
+            <h2>GrimReconciler</h2>
+            <p style="color: var(--text-muted); font-size: 13px;">FinTech Ledger State</p>
+            <div class="right-align">
+                <p class="data-point">1,402</p>
+                <p style="color: var(--accent-green); font-size: 12px;">Settled Transactions</p>
+            </div>
+        </div>
+
+        <!-- App 2: 資安哨兵 -->
+        <div class="card">
+            <h2>PhantomGuard</h2>
+            <p style="color: var(--text-muted); font-size: 13px;">DevOps Sentry</p>
+            <div class="right-align">
+                <p class="data-point">3</p>
+                <p style="color: var(--accent-red); font-size: 12px;">Rogue Instances Terminated</p>
+            </div>
+        </div>
+
+        <!-- 結界測試展示區 -->
+        <div class="card card-large">
+            <h2>Anti-Phantom Shield</h2>
+            <p style="color: var(--text-muted); font-size: 13px;">Test the pre-commit hook constraints at runtime.</p>
+            <button class="test-btn" onclick="testMiragePersistence()">Trigger Mirage Persistence (Blocked)</button>
+            <p id="alert-msg" style="color: var(--accent-red); display: none; margin-top: 10px; font-size: 13px;">❌ [聖騎士淨化] Access to unverified client storage is strictly forbidden by Aegis protocols.</p>
+        </div>
+    </div>
+
+    <script>
+        function testMiragePersistence() {
+            try {
+                // 模擬攔截客戶端未授權偽存儲
+                document.getElementById('alert-msg').style.display = 'block';
+                setTimeout(() => { document.getElementById('alert-msg').style.display = 'none'; }, 3000);
+            } catch (e) {
+                console.error(e);
+            }
+        }
+    </script>
+</body>
+</html>
