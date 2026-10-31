@@ -3,423 +3,465 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AegisSkeleton // FinOps Event Sentinel</title>
+    <title>AegisSkeleton // Paladin vs Phantom Sentry</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=JetBrains+Mono:wght@400;600;700&family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg-base: #090a0f;
-            --bg-panel: #11131a;
-            --bg-subtle: #181b26;
-            --border: rgba(255, 255, 255, 0.08);
-            --border-strong: rgba(255, 255, 255, 0.16);
-            --text-primary: #f0f3f6;
-            --text-secondary: #8b949e;
-            --text-muted: #484f58;
-            --accent-cyan: #00f2fe;
-            --accent-green: #00e676;
-            --accent-red: #ff1744;
-            --accent-amber: #ff9100;
+            --bg-void: #06070a;
+            --paladin-gold: #fbbf24;
+            --paladin-glow: rgba(251, 191, 36, 0.4);
+            --zombie-green: #10b981;
+            --blood-red: #ef4444;
+            --panel-bg: rgba(15, 18, 28, 0.75);
+            --border-glow: rgba(251, 191, 36, 0.2);
         }
 
-        * { box-sizing: border-box; margin: 0; padding: 0; }
+        * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
         body {
-            background-color: var(--bg-base);
-            color: var(--text-primary);
-            font-family: 'Inter', -apple-system, sans-serif;
-            font-size: 13px;
-            line-height: 1.5;
+            background-color: var(--bg-void);
+            color: #f3f4f6;
+            font-family: 'Inter', sans-serif;
             min-height: 100vh;
-            display: flex;
-            flex-direction: column;
+            overflow-x: hidden;
+            position: relative;
         }
 
-        /* Top Bar Navigation */
-        header {
-            height: 48px;
-            border-bottom: 1px solid var(--border);
-            background: rgba(17, 19, 26, 0.85);
-            backdrop-filter: blur(8px);
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 0 24px;
-            position: sticky;
-            top: 0;
-            z-index: 10;
+        /* 背景畫布（粒子與聖光） */
+        #fxCanvas {
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            pointer-events: none;
+            z-index: 0;
         }
-        .brand {
+
+        /* 頂部萬聖節聖堂 Header */
+        header {
+            position: relative;
+            z-index: 10;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 32px;
+            border-bottom: 1px solid rgba(251, 191, 36, 0.15);
+            background: rgba(6, 7, 10, 0.85);
+            backdrop-filter: blur(12px);
+        }
+        .title-group {
             display: flex;
             align-items: center;
             gap: 12px;
-            font-weight: 600;
-            letter-spacing: -0.2px;
-            font-size: 14px;
         }
-        .brand-badge {
+        .title-group h1 {
+            font-family: 'Cinzel', serif;
+            font-size: 20px;
+            letter-spacing: 2px;
+            color: var(--paladin-gold);
+            text-shadow: 0 0 15px var(--paladin-glow);
+        }
+        .badge {
             font-family: 'JetBrains Mono', monospace;
             font-size: 11px;
-            padding: 2px 6px;
-            background: var(--bg-subtle);
-            border: 1px solid var(--border);
+            padding: 3px 8px;
             border-radius: 4px;
-            color: var(--text-secondary);
-        }
-        .header-meta {
-            display: flex;
-            align-items: center;
-            gap: 20px;
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 12px;
-            color: var(--text-secondary);
-        }
-        .status-dot {
-            width: 7px;
-            height: 7px;
-            background: var(--accent-green);
-            border-radius: 50%;
-            display: inline-block;
-            box-shadow: 0 0 8px var(--accent-green);
+            border: 1px solid rgba(251, 191, 36, 0.3);
+            background: rgba(251, 191, 36, 0.1);
+            color: var(--paladin-gold);
         }
 
-        /* Layout Grid */
+        /* 主舞台容器 */
         main {
-            flex: 1;
-            padding: 24px;
-            max-width: 1280px;
-            margin: 0 auto;
-            width: 100%;
+            position: relative;
+            z-index: 10;
+            max-width: 1200px;
+            margin: 30px auto;
+            padding: 0 24px;
             display: grid;
-            grid-template-columns: 2fr 1fr;
-            gap: 20px;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
         }
 
-        .metric-banner {
+        /* 全域指標大看板 */
+        .hero-banner {
             grid-column: span 2;
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 16px;
-        }
-        .metric-card {
-            background: var(--bg-panel);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 16px 20px;
+            background: linear-gradient(135deg, rgba(20, 24, 38, 0.9), rgba(10, 12, 18, 0.9));
+            border: 1px solid var(--border-glow);
+            border-radius: 14px;
+            padding: 24px 32px;
             display: flex;
-            flex-direction: column;
             justify-content: space-between;
-        }
-        .metric-label {
-            font-size: 11px;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.8px;
-            color: var(--text-secondary);
-        }
-        .metric-value {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 26px;
-            font-weight: 600;
-            margin-top: 8px;
-            font-variant-numeric: tabular-nums;
-        }
-        .metric-sub {
-            font-size: 11px;
-            color: var(--text-muted);
-            margin-top: 4px;
-            display: flex;
             align-items: center;
-            gap: 4px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+        }
+        .burn-stat {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 38px;
+            font-weight: 700;
+            color: #fff;
+            text-shadow: 0 0 20px rgba(255,255,255,0.2);
         }
 
-        /* Panel Container */
-        .panel {
-            background: var(--bg-panel);
-            border: 1px solid var(--border);
-            border-radius: 8px;
+        /* 卡片區域 */
+        .card {
+            background: var(--panel-bg);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 14px;
+            padding: 24px;
+            backdrop-filter: blur(16px);
             display: flex;
             flex-direction: column;
-            overflow: hidden;
+            justify-content: space-between;
+            min-height: 380px;
+            position: relative;
+            transition: all 0.3s ease;
         }
-        .panel-header {
-            padding: 14px 20px;
-            border-bottom: 1px solid var(--border);
+        .card:hover {
+            border-color: rgba(251, 191, 36, 0.3);
+            box-shadow: 0 0 25px rgba(251, 191, 36, 0.08);
+        }
+
+        .card-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            background: rgba(255, 255, 255, 0.01);
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+            padding-bottom: 14px;
+            margin-bottom: 16px;
         }
-        .panel-title {
-            font-size: 13px;
-            font-weight: 600;
+        .card-title {
+            font-family: 'Cinzel', serif;
+            font-size: 16px;
+            font-weight: 700;
             display: flex;
             align-items: center;
             gap: 8px;
         }
-        .panel-tag {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 10px;
-            padding: 1px 5px;
-            border-radius: 3px;
-            background: rgba(0, 242, 254, 0.1);
-            color: var(--accent-cyan);
-            border: 1px solid rgba(0, 242, 254, 0.2);
-        }
 
-        /* Data Table */
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 12px;
-        }
-        th {
-            text-align: left;
-            padding: 10px 16px;
-            font-weight: 500;
-            color: var(--text-secondary);
-            border-bottom: 1px solid var(--border);
-            font-size: 11px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            background: var(--bg-subtle);
-        }
-        td {
-            padding: 12px 16px;
-            border-bottom: 1px solid var(--border);
-            color: var(--text-primary);
-        }
-        tr:last-child td { border-bottom: none; }
-        tr:hover td { background: rgba(255, 255, 255, 0.02); }
-        .tabular { font-family: 'JetBrains Mono', monospace; }
-        .text-right { text-align: right; }
-
-        .pill {
-            display: inline-block;
-            padding: 2px 6px;
-            border-radius: 4px;
-            font-size: 10px;
-            font-family: 'JetBrains Mono', monospace;
-            font-weight: 500;
-        }
-        .pill-success { background: rgba(0, 230, 118, 0.1); color: var(--accent-green); }
-        .pill-danger { background: rgba(255, 23, 68, 0.1); color: var(--accent-red); }
-        .pill-warn { background: rgba(255, 145, 0, 0.1); color: var(--accent-amber); }
-
-        /* Terminal Logs View */
-        .terminal {
-            background: #06070a;
-            padding: 16px;
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 11px;
-            color: #d1d5db;
+        /* 喪屍生成與戰鬥展示區 */
+        .zombie-arena {
             flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
             overflow-y: auto;
-            max-height: 380px;
-            line-height: 1.7;
+            max-height: 220px;
+            padding-right: 6px;
         }
-        .log-line { display: flex; gap: 12px; margin-bottom: 4px; }
-        .log-time { color: var(--text-muted); flex-shrink: 0; }
-        .log-tag-guard { color: var(--accent-red); font-weight: 600; }
-        .log-tag-smite { color: var(--accent-cyan); font-weight: 600; }
-        .cursor {
-            display: inline-block;
-            width: 6px;
-            height: 12px;
-            background: var(--accent-green);
-            animation: blink 1s infinite;
-            vertical-align: middle;
-        }
-        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
-
-        /* Action Controls */
-        .control-box {
-            padding: 16px 20px;
-            border-top: 1px solid var(--border);
-            background: var(--bg-subtle);
+        .zombie-card {
+            background: rgba(239, 68, 68, 0.08);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: 8px;
+            padding: 12px 16px;
             display: flex;
             justify-content: space-between;
             align-items: center;
+            animation: spawnZombie 0.4s cubic-bezier(0.18, 0.89, 0.32, 1.28);
+            transition: all 0.4s ease;
         }
-        .btn {
-            font-family: 'Inter', sans-serif;
-            font-size: 12px;
-            font-weight: 500;
-            padding: 8px 14px;
-            border-radius: 6px;
-            border: 1px solid var(--border-strong);
-            background: var(--bg-panel);
-            color: var(--text-primary);
-            cursor: pointer;
-            transition: all 0.2s ease;
+        @keyframes spawnZombie {
+            from { transform: scale(0.8) translateY(10px); opacity: 0; }
+            to { transform: scale(1) translateY(0); opacity: 1; }
         }
-        .btn:hover {
-            border-color: var(--accent-red);
-            color: var(--accent-red);
-            box-shadow: 0 0 10px rgba(255, 23, 68, 0.2);
+        .zombie-info h4 {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+            color: #fca5a5;
         }
-        .toast {
-            display: none;
+        .zombie-info p {
+            font-size: 11px;
+            color: #9ca3af;
+        }
+        .smite-btn {
+            background: linear-gradient(135deg, #ef4444, #991b1b);
+            border: none;
+            color: #fff;
+            font-family: 'Cinzel', serif;
+            font-size: 11px;
+            font-weight: 700;
             padding: 6px 12px;
-            background: rgba(255, 23, 68, 0.15);
-            border: 1px solid var(--accent-red);
-            color: var(--accent-red);
-            border-radius: 4px;
+            border-radius: 6px;
+            cursor: pointer;
+            box-shadow: 0 0 10px rgba(239, 68, 68, 0.4);
+            transition: all 0.2s;
+        }
+        .smite-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 16px rgba(239, 68, 68, 0.8);
+        }
+
+        /* 動作控制列 */
+        .action-bar {
+            display: flex;
+            gap: 12px;
+            margin-top: 16px;
+        }
+        .btn-gold {
+            flex: 1;
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+            color: #000;
+            font-family: 'Cinzel', serif;
+            font-weight: 700;
+            font-size: 12px;
+            border: none;
+            border-radius: 8px;
+            padding: 12px;
+            cursor: pointer;
+            box-shadow: 0 0 15px var(--paladin-glow);
+            transition: all 0.2s;
+        }
+        .btn-gold:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 0 25px rgba(245, 158, 11, 0.6);
+        }
+        .btn-ghost {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            color: #fff;
             font-family: 'JetBrains Mono', monospace;
             font-size: 11px;
+            border-radius: 8px;
+            padding: 10px 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-ghost:hover {
+            border-color: var(--paladin-gold);
+            color: var(--paladin-gold);
+        }
+
+        /* 聖騎神聖打擊光效覆蓋 */
+        .smite-flash {
+            animation: holyFlash 0.5s ease-out;
+        }
+        @keyframes holyFlash {
+            0% { box-shadow: inset 0 0 80px rgba(251, 191, 36, 0.8); }
+            100% { box-shadow: inset 0 0 0 rgba(251, 191, 36, 0); }
         }
     </style>
 </head>
 <body>
 
+    <canvas id="fxCanvas"></canvas>
+
     <header>
-        <div class="brand">
-            <span>AEGIS_SKELETON</span>
-            <span class="brand-badge">SKELETON_CREW_V1</span>
+        <div class="title-group">
+            <h1>AEGIS // HOLY WARD</h1>
+            <span class="badge">KIROWEEN 2026</span>
+            <span class="badge" style="color: var(--zombie-green); border-color: rgba(16,185,129,0.3);">ZERO-IDLE PALADIN</span>
         </div>
-        <div class="header-meta">
-            <span><span class="status-dot"></span> WARD_IDLE: 0.00ms</span>
-            <span>REGION: us-east-1</span>
-            <span>SPEC: RFC-2026</span>
+        <div style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #9ca3af;">
+            REGION: <span style="color: #fff;">us-east-1</span> | SANCTUARY LEVEL: <span style="color: var(--paladin-gold);">DIVINE</span>
         </div>
     </header>
 
     <main>
-        <!-- Metric Overview -->
-        <div class="metric-banner">
-            <div class="metric-card">
-                <span class="metric-label">Idle Burn Rate</span>
-                <span class="metric-value">$0.000<span style="font-size: 13px; color: var(--text-muted); font-weight: normal;"> / hr</span></span>
-                <span class="metric-sub">Zero persistent instances</span>
+        <!-- 頂部總結算看板 -->
+        <div class="hero-banner" id="mainBanner">
+            <div>
+                <p style="font-size: 12px; color: #9ca3af; text-transform: uppercase; letter-spacing: 1.5px;">Cloud Idle Burn Deficit</p>
+                <div class="burn-stat">$<span id="burnRate">0.000</span> <span style="font-size: 16px; color: #9ca3af; font-weight: normal;">USD/hr</span></div>
             </div>
-            <div class="metric-card">
-                <span class="metric-label">GrimReconciler Pipeline</span>
-                <span class="metric-value" style="color: var(--accent-green);">1,402</span>
-                <span class="metric-sub">Settled ledger records</span>
-            </div>
-            <div class="metric-card">
-                <span class="metric-label">PhantomGuard Sentry</span>
-                <span class="metric-value" style="color: var(--accent-red);">3</span>
-                <span class="metric-sub">Rogue EC2/RDS neutralized</span>
-            </div>
-            <div class="metric-card">
-                <span class="metric-label">DynamoDB State TTL</span>
-                <span class="metric-value">604,800<span style="font-size: 13px; color: var(--text-muted); font-weight: normal;"> s</span></span>
-                <span class="metric-sub">Auto-purged ledger retention</span>
+            <div style="text-align: right;">
+                <p style="font-size: 12px; color: #9ca3af; text-transform: uppercase; letter-spacing: 1.5px;">Zombies Purged</p>
+                <div class="burn-stat" style="color: var(--paladin-gold);" id="killCount">3</div>
             </div>
         </div>
 
-        <!-- Left Column: GrimReconciler Data Table -->
-        <div class="panel">
-            <div class="panel-header">
-                <div class="panel-title">
-                    <span>GrimReconciler Ledger Pipeline</span>
-                    <span class="panel-tag">apps/grim-reconciler</span>
+        <!-- App 1: GrimReconciler 聖殿對帳 -->
+        <div class="card" id="reconcilerCard">
+            <div>
+                <div class="card-header">
+                    <span class="card-title">⚖️ GrimReconciler Ledger</span>
+                    <span class="badge">apps/grim-reconciler</span>
                 </div>
-                <span style="font-size: 11px; color: var(--text-secondary); font-family: 'JetBrains Mono', monospace;">INGEST: SQS_FIFO</span>
+                <p style="font-size: 12px; color: #9ca3af; margin-bottom: 16px;">
+                    Zero-polling FinTech reconciler. Consumes SQS queues and settles transactions into DynamoDB.
+                </p>
+                <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px;">
+                    <span style="font-family: 'JetBrains Mono', monospace; font-size: 28px; font-weight: 700; color: #fff;" id="txCount">1,402</span>
+                    <span style="font-size: 11px; color: var(--zombie-green); font-family: 'JetBrains Mono', monospace;">● 100% IN SYNC</span>
+                </div>
+                <div style="height: 140px; background: rgba(0,0,0,0.3); border-radius: 8px; padding: 12px; font-family: 'JetBrains Mono', monospace; font-size: 11px; overflow-y: auto;" id="txFeed">
+                    <div style="color: #6b7280; margin-bottom: 4px;">[00:12] Batch Settled: TX-9021 (Amount: $120.00)</div>
+                    <div style="color: #6b7280; margin-bottom: 4px;">[00:18] Batch Settled: TX-9022 (Amount: $4,510.00)</div>
+                    <div style="color: #6b7280;">[00:25] Batch Settled: TX-9023 (Amount: $85.50)</div>
+                </div>
             </div>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Transaction ID</th>
-                        <th>Settled Amount</th>
-                        <th>Latency</th>
-                        <th>State</th>
-                        <th class="text-right">Action</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td class="tabular">TX-88492019</td>
-                        <td class="tabular">$1,250.00</td>
-                        <td class="tabular" style="color: var(--text-secondary);">42ms</td>
-                        <td><span class="pill pill-success">SETTLED</span></td>
-                        <td class="tabular text-right" style="color: var(--text-muted);">DynamoDB::Put</td>
-                    </tr>
-                    <tr>
-                        <td class="tabular">TX-88492020</td>
-                        <td class="tabular">$840.50</td>
-                        <td class="tabular" style="color: var(--text-secondary);">38ms</td>
-                        <td><span class="pill pill-success">SETTLED</span></td>
-                        <td class="tabular text-right" style="color: var(--text-muted);">DynamoDB::Put</td>
-                    </tr>
-                    <tr>
-                        <td class="tabular">TX-88492021</td>
-                        <td class="tabular">$3,400.00</td>
-                        <td class="tabular" style="color: var(--text-secondary);">91ms</td>
-                        <td><span class="pill pill-warn">DISCREPANCY</span></td>
-                        <td class="tabular text-right" style="color: var(--text-muted);">Queue::Flagged</td>
-                    </tr>
-                    <tr>
-                        <td class="tabular">TX-88492022</td>
-                        <td class="tabular">$19.99</td>
-                        <td class="tabular" style="color: var(--text-secondary);">31ms</td>
-                        <td><span class="pill pill-success">SETTLED</span></td>
-                        <td class="tabular text-right" style="color: var(--text-muted);">DynamoDB::Put</td>
-                    </tr>
-                </tbody>
-            </table>
-            <div class="control-box">
-                <span style="font-size: 11px; color: var(--text-secondary);">Pre-commit Hook Guard: Active</span>
-                <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--accent-green);">Zero Mirage Persistence Detected</span>
+            <div class="action-bar">
+                <button class="btn-gold" onclick="castReconciliation()">⚔️ Cast Divine Reconcile</button>
             </div>
         </div>
 
-        <!-- Right Column: Sentry Audit Log -->
-        <div class="panel">
-            <div class="panel-header">
-                <div class="panel-title">
-                    <span>PhantomGuard Sentry Stream</span>
-                    <span class="panel-tag" style="background: rgba(255,23,68,0.1); color: var(--accent-red); border-color: rgba(255,23,68,0.2);">apps/phantom-guard</span>
+        <!-- App 2: PhantomGuard 雲端喪屍熔斷場 -->
+        <div class="card" id="guardCard">
+            <div>
+                <div class="card-header">
+                    <span class="card-title">🧟 PhantomGuard Sentry</span>
+                    <span class="badge" style="color: #f87171; border-color: rgba(248,113,113,0.3);">apps/phantom-guard</span>
+                </div>
+                <p style="font-size: 12px; color: #9ca3af; margin-bottom: 12px;">
+                    Detects rogue persistent instances spawned without approval. Purge them to restore $0.00 idle rate!
+                </p>
+                <div class="zombie-arena" id="zombieContainer">
+                    <div class="zombie-card" id="zombie-1">
+                        <div class="zombie-info">
+                            <h4>EC2: i-08b33a1e (Zombie)</h4>
+                            <p>Burn: +$0.096/hr | Rogue Instance</p>
+                        </div>
+                        <button class="smite-btn" onclick="smiteZombie('zombie-1', 0.096)">⚡ SMITE</button>
+                    </div>
                 </div>
             </div>
-            <div class="terminal" id="terminalLog">
-                <div class="log-line">
-                    <span class="log-time">12:45:10</span>
-                    <span class="log-tag-guard">[CIRCUIT]</span>
-                    <span>EC2 i-09f1a2 spawned without FinOps tag</span>
-                </div>
-                <div class="log-line">
-                    <span class="log-time">12:45:11</span>
-                    <span class="log-tag-guard">[ACTION]</span>
-                    <span>Termination signal broadcasted ($0.084/hr saved)</span>
-                </div>
-                <div class="log-line">
-                    <span class="log-time">12:50:02</span>
-                    <span class="log-tag-smite">[HOOK]</span>
-                    <span>git diff evaluated: 0 forbidden mock keywords</span>
-                </div>
-                <div class="log-line">
-                    <span class="log-time">12:59:44</span>
-                    <span class="log-tag-guard">[SYS]</span>
-                    <span>FinOps Sentry MCP Server poll: Burn delta $0.00</span>
-                </div>
-                <div class="log-line">
-                    <span class="log-time">13:05:00</span>
-                    <span class="log-tag-guard">[SYS]</span>
-                    <span>Listening on CloudWatch EventBridge pipeline...<span class="cursor"></span></span>
-                </div>
-            </div>
-            <div class="control-box">
-                <div class="toast" id="hookToast">BLOCKED: Aegis Smite intercepted unauthorized client storage.</div>
-                <button class="btn" onclick="triggerSmite()">Simulate Phantom Mock</button>
+            <div class="action-bar">
+                <button class="btn-ghost" onclick="spawnZombie()">+ Summon Rogue Zombie</button>
+                <button class="btn-gold" style="background: linear-gradient(135deg, #ef4444, #b91c1c); color:#fff;" onclick="smiteAll()">🔥 Smite All</button>
             </div>
         </div>
     </main>
 
     <script>
-        function triggerSmite() {
-            const toast = document.getElementById('hookToast');
-            toast.style.display = 'block';
-            
-            const term = document.getElementById('terminalLog');
-            const newLog = document.createElement('div');
-            newLog.className = 'log-line';
-            newLog.innerHTML = `<span class="log-time">${new Date().toTimeString().split(' ')[0]}</span><span class="log-tag-smite">[SMITE]</span><span style="color:#ff1744">Pre-commit blocked mock storage attempt</span>`;
-            term.appendChild(newLog);
-            term.scrollTop = term.scrollHeight;
+        // 畫布粒子物理系統 (Canvas Particle Engine)
+        const canvas = document.getElementById('fxCanvas');
+        const ctx = canvas.getContext('2d');
+        let particles = [];
 
-            setTimeout(() => { toast.style.display = 'none'; }, 3000);
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        class Particle {
+            constructor(x, y, color) {
+                this.x = x;
+                this.y = y;
+                this.color = color;
+                this.radius = Math.random() * 3 + 1;
+                this.speedX = (Math.random() - 0.5) * 8;
+                this.speedY = (Math.random() - 0.5) * 8;
+                this.alpha = 1;
+                this.decay = Math.random() * 0.03 + 0.015;
+            }
+            update() {
+                this.x += this.speedX;
+                this.y += this.speedY;
+                this.alpha -= this.decay;
+            }
+            draw() {
+                ctx.save();
+                ctx.globalAlpha = Math.max(0, this.alpha);
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        function createBurst(x, y, color, count = 30) {
+            for (let i = 0; i < count; i++) {
+                particles.push(new Particle(x, y, color));
+            }
+        }
+
+        function animateFX() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            for (let i = particles.length - 1; i >= 0; i--) {
+                particles[i].update();
+                particles[i].draw();
+                if (particles[i].alpha <= 0) particles.splice(i, 1);
+            }
+            requestAnimationFrame(animateFX);
+        }
+        animateFX();
+
+        // 業務邏輯與微互動變數
+        let burnTotal = 0.096;
+        let killCount = 3;
+        let txTotal = 1402;
+        let zombieIndex = 2;
+
+        function updateBurnDisplay() {
+            document.getElementById('burnRate').innerText = burnTotal.toFixed(3);
+            document.getElementById('killCount').innerText = killCount;
+        }
+        updateBurnDisplay();
+
+        // 聖騎斬殺喪屍
+        function smiteZombie(id, cost, event) {
+            const el = document.getElementById(id);
+            if (!el) return;
+
+            const rect = el.getBoundingClientRect();
+            createBurst(rect.left + rect.width / 2, rect.top + rect.height / 2, '#fbbf24', 40);
+            createBurst(rect.left + rect.width / 2, rect.top + rect.height / 2, '#ef4444', 20);
+
+            el.style.transform = 'scale(1.2) rotate(5deg)';
+            el.style.opacity = '0';
+            setTimeout(() => {
+                el.remove();
+                burnTotal = Math.max(0, burnTotal - cost);
+                killCount++;
+                updateBurnDisplay();
+            }, 300);
+
+            document.getElementById('guardCard').classList.add('smite-flash');
+            setTimeout(() => document.getElementById('guardCard').classList.remove('smite-flash'), 500);
+        }
+
+        // 召喚雲端喪屍實例
+        function spawnZombie() {
+            const container = document.getElementById('zombieContainer');
+            const id = `zombie-${zombieIndex++}`;
+            const cost = 0.084;
+            burnTotal += cost;
+            updateBurnDisplay();
+
+            const card = document.createElement('div');
+            card.className = 'zombie-card';
+            card.id = id;
+            card.innerHTML = `
+                <div class="zombie-info">
+                    <h4>RDS: db-unbudgeted-${zombieIndex} (Zombie)</h4>
+                    <p>Burn: +$${cost}/hr | Rogue Database</p>
+                </div>
+                <button class="smite-btn" onclick="smiteZombie('${id}', ${cost}, event)">⚡ SMITE</button>
+            `;
+            container.appendChild(card);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        // 聖騎大招：一鍵全滅
+        function smiteAll() {
+            const zombies = document.querySelectorAll('.zombie-card');
+            zombies.forEach((z, i) => {
+                setTimeout(() => {
+                    const btn = z.querySelector('.smite-btn');
+                    if (btn) btn.click();
+                }, i * 150);
+            });
+        }
+
+        // 聖殿對帳大招
+        function castReconciliation() {
+            const card = document.getElementById('reconcilerCard');
+            card.classList.add('smite-flash');
+            setTimeout(() => card.classList.remove('smite-flash'), 500);
+
+            const rect = card.getBoundingClientRect();
+            createBurst(rect.left + rect.width / 2, rect.top + rect.height / 2, '#fbbf24', 50);
+
+            txTotal += 10;
+            document.getElementById('txCount').innerText = txTotal.toLocaleString();
+
+            const feed = document.getElementById('txFeed');
+            const log = document.createElement('div');
+            log.style.color = '#fbbf24';
+            log.style.marginTop = '4px';
+            log.innerText = `[${new Date().toTimeString().split(' ')[0]}] ⚡ High-Throughput Batch: 10 Tx Settled via ARM64 Lambda`;
+            feed.prepend(log);
         }
     </script>
 </body>
