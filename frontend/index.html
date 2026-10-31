@@ -5,126 +5,273 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AegisSkeleton Dashboard</title>
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+        
         :root {
-            --bg-color: #0A0A0A;
-            --card-bg: #141414;
-            --border-color: rgba(255, 255, 255, 0.08);
-            --text-main: #FFFFFF;
-            --text-muted: #888888;
-            --accent-green: #00FF66;
-            --accent-red: #FF3366;
+            --bg-color: #050505;
+            --card-bg: rgba(20, 20, 20, 0.6);
+            --border-color: rgba(255, 255, 255, 0.05);
+            --border-hover: rgba(255, 255, 255, 0.15);
+            --text-main: #F3F4F6;
+            --text-muted: #9CA3AF;
+            --accent-green: #10B981;
+            --accent-red: #EF4444;
+            --glow-green: rgba(16, 185, 129, 0.15);
+            --glow-red: rgba(239, 68, 68, 0.15);
         }
+        
         body {
             background-color: var(--bg-color);
             color: var(--text-main);
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            font-family: 'Inter', -apple-system, sans-serif;
             margin: 0;
-            padding: 40px;
+            padding: 60px 40px;
             display: flex;
             justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-image: 
+                radial-gradient(circle at 15% 50%, rgba(255,255,255,0.015) 0%, transparent 50%),
+                radial-gradient(circle at 85% 30%, rgba(16,185,129,0.02) 0%, transparent 40%);
         }
+
         .bento-grid {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
-            gap: 20px;
-            max-width: 900px;
+            gap: 24px;
+            max-width: 960px;
             width: 100%;
+            position: relative;
+            z-index: 1;
         }
+
         .card {
             background: var(--card-bg);
             border: 1px solid var(--border-color);
-            border-radius: 12px;
-            padding: 24px;
-            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+            border-radius: 16px;
+            padding: 32px;
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
         }
+
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: linear-gradient(180deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0) 100%);
+            opacity: 0;
+            transition: opacity 0.4s ease;
+            z-index: -1;
+        }
+
         .card:hover {
-            border-color: rgba(255, 255, 255, 0.2);
-            box-shadow: 0 0 15px rgba(255, 255, 255, 0.05);
+            border-color: var(--border-hover);
+            transform: translateY(-2px);
+            box-shadow: 0 10px 40px -10px rgba(0,0,0,0.5);
         }
+
+        .card:hover::before { opacity: 1; }
+
         .card-large { grid-column: span 2; }
-        h2 { font-size: 14px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; margin-top: 0; }
-        .data-point {
-            font-size: 32px;
+
+        h2 { 
+            font-size: 12px; 
+            color: var(--text-muted); 
+            text-transform: uppercase; 
+            letter-spacing: 1.5px; 
+            margin: 0 0 8px 0; 
             font-weight: 500;
-            font-variant-numeric: tabular-nums;
-            margin: 10px 0 0 0;
         }
-        .right-align { text-align: right; }
-        .status-badge {
-            display: inline-block;
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-size: 12px;
-            background: rgba(0, 255, 102, 0.1);
-            color: var(--accent-green);
-        }
-        .test-btn {
-            background: transparent;
-            border: 1px solid var(--text-muted);
+
+        .data-point {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 42px;
+            font-weight: 500;
+            margin: 16px 0 0 0;
             color: var(--text-main);
-            padding: 8px 16px;
-            border-radius: 6px;
-            cursor: pointer;
-            margin-top: 20px;
-            transition: border 0.2s;
+            letter-spacing: -1px;
         }
-        .test-btn:hover { border-color: var(--accent-red); color: var(--accent-red); }
+
+        .right-align { text-align: right; }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+            background: rgba(16, 185, 129, 0.1);
+            color: var(--accent-green);
+            border: 1px solid rgba(16, 185, 129, 0.2);
+        }
+
+        .status-badge::before {
+            content: '';
+            display: inline-block;
+            width: 6px;
+            height: 6px;
+            background-color: var(--accent-green);
+            border-radius: 50%;
+            margin-right: 6px;
+            box-shadow: 0 0 8px var(--accent-green);
+        }
+
+        .test-btn {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border-color);
+            color: var(--text-main);
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            margin-top: 24px;
+            font-size: 13px;
+            font-family: 'Inter', sans-serif;
+            transition: all 0.2s ease;
+            align-self: flex-start;
+        }
+
+        .test-btn:hover { 
+            border-color: var(--accent-red); 
+            background: rgba(239, 68, 68, 0.05);
+            color: #fff;
+            box-shadow: 0 0 15px var(--glow-red);
+        }
+
+        .test-btn:active { transform: scale(0.98); }
+
+        .alert-box {
+            display: none;
+            margin-top: 16px;
+            padding: 12px 16px;
+            border-radius: 8px;
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            color: var(--accent-red);
+            font-size: 13px;
+            font-family: 'JetBrains Mono', monospace;
+            animation: slideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* 呼吸燈效果 */
+        .pulse-green { animation: pulseGreen 2s infinite; }
+        @keyframes pulseGreen {
+            0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); }
+            70% { box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+        }
     </style>
 </head>
 <body>
     <div class="bento-grid">
         <!-- 骨架核心區 -->
         <div class="card card-large">
-            <h2>AegisSkeleton Core (Zero-Idle)</h2>
-            <div style="display: flex; justify-content: space-between; align-items: flex-end;">
+            <div>
+                <h2>AegisSkeleton Core (Zero-Idle)</h2>
+                <p style="color: var(--text-muted); font-size: 14px; margin: 0;">FinOps Guardrailed Event Architecture</p>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-top: 40px;">
                 <div>
-                    <span class="status-badge">● Ward Active</span>
-                    <p style="color: var(--text-muted); font-size: 14px; margin-top: 10px;">SQS -> Lambda -> DynamoDB</p>
+                    <span class="status-badge pulse-green">Ward Active</span>
+                    <p style="color: var(--text-muted); font-size: 13px; margin: 12px 0 0 0; font-family: 'JetBrains Mono', monospace;">SQS → Lambda(ARM64) → DynamoDB</p>
                 </div>
                 <div class="right-align">
-                    <p class="data-point">0.000 <span style="font-size: 16px; color: var(--text-muted);">USD / hr</span></p>
+                    <p class="data-point">0.000 <span style="font-size: 16px; color: var(--text-muted); font-family: 'Inter', sans-serif;">USD / hr</span></p>
                 </div>
             </div>
         </div>
         
         <!-- App 1: 財務對帳 -->
-        <div class="card">
-            <h2>GrimReconciler</h2>
-            <p style="color: var(--text-muted); font-size: 13px;">FinTech Ledger State</p>
-            <div class="right-align">
-                <p class="data-point">1,402</p>
-                <p style="color: var(--accent-green); font-size: 12px;">Settled Transactions</p>
+        <div class="card" style="box-shadow: 0 10px 30px var(--glow-green);">
+            <div>
+                <h2>GrimReconciler</h2>
+                <p style="color: var(--text-muted); font-size: 13px; margin: 0;">FinTech Ledger Reconciliation</p>
+            </div>
+            <div class="right-align" style="margin-top: 32px;">
+                <p class="data-point counter" data-target="1402">0</p>
+                <p style="color: var(--accent-green); font-size: 13px; margin: 8px 0 0 0; font-weight: 500;">Settled Transactions</p>
             </div>
         </div>
 
         <!-- App 2: 資安哨兵 -->
         <div class="card">
-            <h2>PhantomGuard</h2>
-            <p style="color: var(--text-muted); font-size: 13px;">DevOps Sentry</p>
-            <div class="right-align">
-                <p class="data-point">3</p>
-                <p style="color: var(--accent-red); font-size: 12px;">Rogue Instances Terminated</p>
+            <div>
+                <h2>PhantomGuard</h2>
+                <p style="color: var(--text-muted); font-size: 13px; margin: 0;">DevOps Rogue Instance Sentry</p>
+            </div>
+            <div class="right-align" style="margin-top: 32px;">
+                <p class="data-point counter" data-target="3">0</p>
+                <p style="color: var(--accent-red); font-size: 13px; margin: 8px 0 0 0; font-weight: 500;">Instances Terminated</p>
             </div>
         </div>
 
         <!-- 結界測試展示區 -->
         <div class="card card-large">
-            <h2>Anti-Phantom Shield</h2>
-            <p style="color: var(--text-muted); font-size: 13px;">Test the pre-commit hook constraints at runtime.</p>
-            <button class="test-btn" onclick="testMiragePersistence()">Trigger Mirage Persistence (Blocked)</button>
-            <p id="alert-msg" style="color: var(--accent-red); display: none; margin-top: 10px; font-size: 13px;">❌ [聖騎士淨化] Access to unverified client storage is strictly forbidden by Aegis protocols.</p>
+            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                <div>
+                    <h2>Anti-Phantom Shield</h2>
+                    <p style="color: var(--text-muted); font-size: 13px; margin: 0;">Test runtime constraints enforced by pre-commit hooks.</p>
+                </div>
+                <button class="test-btn" onclick="testMiragePersistence()">Trigger Mirage Persistence</button>
+            </div>
+            <div id="alert-msg" class="alert-box">
+                > [Aegis Smite] ACCESS DENIED: Unverified client storage write blocked by protocol.
+            </div>
         </div>
     </div>
 
     <script>
+        // 數字滾動動畫
+        const counters = document.querySelectorAll('.counter');
+        const speed = 200; 
+
+        counters.forEach(counter => {
+            const updateCount = () => {
+                const target = +counter.getAttribute('data-target');
+                const count = +counter.innerText.replace(/,/g, '');
+                const inc = target / speed;
+
+                if (count < target) {
+                    counter.innerText = Math.ceil(count + inc).toLocaleString();
+                    setTimeout(updateCount, 15);
+                } else {
+                    counter.innerText = target.toLocaleString();
+                }
+            };
+            updateCount();
+        });
+
+        // 模擬攔截動畫
         function testMiragePersistence() {
-            try {
-                // 模擬攔截客戶端未授權偽存儲
-                document.getElementById('alert-msg').style.display = 'block';
-                setTimeout(() => { document.getElementById('alert-msg').style.display = 'none'; }, 3000);
-            } catch (e) {
-                console.error(e);
-            }
+            const alertBox = document.getElementById('alert-msg');
+            alertBox.style.display = 'block';
+            
+            // 震動效果
+            alertBox.animate([
+                { transform: 'translateX(0)' },
+                { transform: 'translateX(-5px)' },
+                { transform: 'translateX(5px)' },
+                { transform: 'translateX(0)' }
+            ], { duration: 300, iterations: 1 });
+
+            setTimeout(() => { 
+                alertBox.style.opacity = '0';
+                setTimeout(() => {
+                    alertBox.style.display = 'none';
+                    alertBox.style.opacity = '1';
+                }, 300);
+            }, 3500);
         }
     </script>
 </body>
