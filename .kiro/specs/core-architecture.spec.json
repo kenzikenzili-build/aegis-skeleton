@@ -1,0 +1,10 @@
+{
+  "project": "AegisSkeleton",
+  "version": "1.0.0",
+  "strict_rules": [
+    "ALL incoming requests MUST be buffered through AegisIngestionQueue.",
+    "NEVER use long-polling or persistent EC2 instances for application runtime.",
+    "ALL state MUST be written to AegisStateTable with a strict TTL.",
+    "Frontend MUST NOT mock databases using localStorage or in-memory arrays."
+  ]
+}
