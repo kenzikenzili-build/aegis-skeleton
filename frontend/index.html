@@ -3,275 +3,423 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AegisSkeleton Dashboard</title>
+    <title>AegisSkeleton // FinOps Event Sentinel</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
-        
         :root {
-            --bg-color: #050505;
-            --card-bg: rgba(20, 20, 20, 0.6);
-            --border-color: rgba(255, 255, 255, 0.05);
-            --border-hover: rgba(255, 255, 255, 0.15);
-            --text-main: #F3F4F6;
-            --text-muted: #9CA3AF;
-            --accent-green: #10B981;
-            --accent-red: #EF4444;
-            --glow-green: rgba(16, 185, 129, 0.15);
-            --glow-red: rgba(239, 68, 68, 0.15);
+            --bg-base: #090a0f;
+            --bg-panel: #11131a;
+            --bg-subtle: #181b26;
+            --border: rgba(255, 255, 255, 0.08);
+            --border-strong: rgba(255, 255, 255, 0.16);
+            --text-primary: #f0f3f6;
+            --text-secondary: #8b949e;
+            --text-muted: #484f58;
+            --accent-cyan: #00f2fe;
+            --accent-green: #00e676;
+            --accent-red: #ff1744;
+            --accent-amber: #ff9100;
         }
-        
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
-            background-color: var(--bg-color);
-            color: var(--text-main);
+            background-color: var(--bg-base);
+            color: var(--text-primary);
             font-family: 'Inter', -apple-system, sans-serif;
-            margin: 0;
-            padding: 60px 40px;
-            display: flex;
-            justify-content: center;
-            align-items: center;
+            font-size: 13px;
+            line-height: 1.5;
             min-height: 100vh;
-            background-image: 
-                radial-gradient(circle at 15% 50%, rgba(255,255,255,0.015) 0%, transparent 50%),
-                radial-gradient(circle at 85% 30%, rgba(16,185,129,0.02) 0%, transparent 40%);
+            display: flex;
+            flex-direction: column;
         }
 
-        .bento-grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 24px;
-            max-width: 960px;
+        /* Top Bar Navigation */
+        header {
+            height: 48px;
+            border-bottom: 1px solid var(--border);
+            background: rgba(17, 19, 26, 0.85);
+            backdrop-filter: blur(8px);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 24px;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-weight: 600;
+            letter-spacing: -0.2px;
+            font-size: 14px;
+        }
+        .brand-badge {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            padding: 2px 6px;
+            background: var(--bg-subtle);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            color: var(--text-secondary);
+        }
+        .header-meta {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+        .status-dot {
+            width: 7px;
+            height: 7px;
+            background: var(--accent-green);
+            border-radius: 50%;
+            display: inline-block;
+            box-shadow: 0 0 8px var(--accent-green);
+        }
+
+        /* Layout Grid */
+        main {
+            flex: 1;
+            padding: 24px;
+            max-width: 1280px;
+            margin: 0 auto;
             width: 100%;
-            position: relative;
-            z-index: 1;
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 20px;
         }
 
-        .card {
-            background: var(--card-bg);
-            border: 1px solid var(--border-color);
-            border-radius: 16px;
-            padding: 32px;
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-            position: relative;
-            overflow: hidden;
+        .metric-banner {
+            grid-column: span 2;
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+        }
+        .metric-card {
+            background: var(--bg-panel);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 16px 20px;
             display: flex;
             flex-direction: column;
             justify-content: space-between;
         }
-
-        .card::before {
-            content: '';
-            position: absolute;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background: linear-gradient(180deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0) 100%);
-            opacity: 0;
-            transition: opacity 0.4s ease;
-            z-index: -1;
+        .metric-label {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            color: var(--text-secondary);
         }
-
-        .card:hover {
-            border-color: var(--border-hover);
-            transform: translateY(-2px);
-            box-shadow: 0 10px 40px -10px rgba(0,0,0,0.5);
-        }
-
-        .card:hover::before { opacity: 1; }
-
-        .card-large { grid-column: span 2; }
-
-        h2 { 
-            font-size: 12px; 
-            color: var(--text-muted); 
-            text-transform: uppercase; 
-            letter-spacing: 1.5px; 
-            margin: 0 0 8px 0; 
-            font-weight: 500;
-        }
-
-        .data-point {
+        .metric-value {
             font-family: 'JetBrains Mono', monospace;
-            font-size: 42px;
-            font-weight: 500;
-            margin: 16px 0 0 0;
-            color: var(--text-main);
-            letter-spacing: -1px;
+            font-size: 26px;
+            font-weight: 600;
+            margin-top: 8px;
+            font-variant-numeric: tabular-nums;
         }
-
-        .right-align { text-align: right; }
-
-        .status-badge {
-            display: inline-flex;
+        .metric-sub {
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-top: 4px;
+            display: flex;
             align-items: center;
-            padding: 4px 10px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: 500;
-            background: rgba(16, 185, 129, 0.1);
-            color: var(--accent-green);
-            border: 1px solid rgba(16, 185, 129, 0.2);
+            gap: 4px;
         }
 
-        .status-badge::before {
-            content: '';
+        /* Panel Container */
+        .panel {
+            background: var(--bg-panel);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .panel-header {
+            padding: 14px 20px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(255, 255, 255, 0.01);
+        }
+        .panel-title {
+            font-size: 13px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .panel-tag {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 10px;
+            padding: 1px 5px;
+            border-radius: 3px;
+            background: rgba(0, 242, 254, 0.1);
+            color: var(--accent-cyan);
+            border: 1px solid rgba(0, 242, 254, 0.2);
+        }
+
+        /* Data Table */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+        th {
+            text-align: left;
+            padding: 10px 16px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            border-bottom: 1px solid var(--border);
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            background: var(--bg-subtle);
+        }
+        td {
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border);
+            color: var(--text-primary);
+        }
+        tr:last-child td { border-bottom: none; }
+        tr:hover td { background: rgba(255, 255, 255, 0.02); }
+        .tabular { font-family: 'JetBrains Mono', monospace; }
+        .text-right { text-align: right; }
+
+        .pill {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 500;
+        }
+        .pill-success { background: rgba(0, 230, 118, 0.1); color: var(--accent-green); }
+        .pill-danger { background: rgba(255, 23, 68, 0.1); color: var(--accent-red); }
+        .pill-warn { background: rgba(255, 145, 0, 0.1); color: var(--accent-amber); }
+
+        /* Terminal Logs View */
+        .terminal {
+            background: #06070a;
+            padding: 16px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            color: #d1d5db;
+            flex: 1;
+            overflow-y: auto;
+            max-height: 380px;
+            line-height: 1.7;
+        }
+        .log-line { display: flex; gap: 12px; margin-bottom: 4px; }
+        .log-time { color: var(--text-muted); flex-shrink: 0; }
+        .log-tag-guard { color: var(--accent-red); font-weight: 600; }
+        .log-tag-smite { color: var(--accent-cyan); font-weight: 600; }
+        .cursor {
             display: inline-block;
             width: 6px;
-            height: 6px;
-            background-color: var(--accent-green);
-            border-radius: 50%;
-            margin-right: 6px;
-            box-shadow: 0 0 8px var(--accent-green);
+            height: 12px;
+            background: var(--accent-green);
+            animation: blink 1s infinite;
+            vertical-align: middle;
         }
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
 
-        .test-btn {
-            background: rgba(255, 255, 255, 0.03);
-            border: 1px solid var(--border-color);
-            color: var(--text-main);
-            padding: 10px 20px;
-            border-radius: 8px;
-            cursor: pointer;
-            margin-top: 24px;
-            font-size: 13px;
+        /* Action Controls */
+        .control-box {
+            padding: 16px 20px;
+            border-top: 1px solid var(--border);
+            background: var(--bg-subtle);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .btn {
             font-family: 'Inter', sans-serif;
+            font-size: 12px;
+            font-weight: 500;
+            padding: 8px 14px;
+            border-radius: 6px;
+            border: 1px solid var(--border-strong);
+            background: var(--bg-panel);
+            color: var(--text-primary);
+            cursor: pointer;
             transition: all 0.2s ease;
-            align-self: flex-start;
         }
-
-        .test-btn:hover { 
-            border-color: var(--accent-red); 
-            background: rgba(239, 68, 68, 0.05);
-            color: #fff;
-            box-shadow: 0 0 15px var(--glow-red);
-        }
-
-        .test-btn:active { transform: scale(0.98); }
-
-        .alert-box {
-            display: none;
-            margin-top: 16px;
-            padding: 12px 16px;
-            border-radius: 8px;
-            background: rgba(239, 68, 68, 0.1);
-            border: 1px solid rgba(239, 68, 68, 0.3);
+        .btn:hover {
+            border-color: var(--accent-red);
             color: var(--accent-red);
-            font-size: 13px;
+            box-shadow: 0 0 10px rgba(255, 23, 68, 0.2);
+        }
+        .toast {
+            display: none;
+            padding: 6px 12px;
+            background: rgba(255, 23, 68, 0.15);
+            border: 1px solid var(--accent-red);
+            color: var(--accent-red);
+            border-radius: 4px;
             font-family: 'JetBrains Mono', monospace;
-            animation: slideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-        }
-
-        @keyframes slideIn {
-            from { opacity: 0; transform: translateY(-10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        /* 呼吸燈效果 */
-        .pulse-green { animation: pulseGreen 2s infinite; }
-        @keyframes pulseGreen {
-            0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); }
-            70% { box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
-            100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+            font-size: 11px;
         }
     </style>
 </head>
 <body>
-    <div class="bento-grid">
-        <!-- 骨架核心區 -->
-        <div class="card card-large">
-            <div>
-                <h2>AegisSkeleton Core (Zero-Idle)</h2>
-                <p style="color: var(--text-muted); font-size: 14px; margin: 0;">FinOps Guardrailed Event Architecture</p>
-            </div>
-            <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-top: 40px;">
-                <div>
-                    <span class="status-badge pulse-green">Ward Active</span>
-                    <p style="color: var(--text-muted); font-size: 13px; margin: 12px 0 0 0; font-family: 'JetBrains Mono', monospace;">SQS → Lambda(ARM64) → DynamoDB</p>
-                </div>
-                <div class="right-align">
-                    <p class="data-point">0.000 <span style="font-size: 16px; color: var(--text-muted); font-family: 'Inter', sans-serif;">USD / hr</span></p>
-                </div>
-            </div>
+
+    <header>
+        <div class="brand">
+            <span>AEGIS_SKELETON</span>
+            <span class="brand-badge">SKELETON_CREW_V1</span>
         </div>
-        
-        <!-- App 1: 財務對帳 -->
-        <div class="card" style="box-shadow: 0 10px 30px var(--glow-green);">
-            <div>
-                <h2>GrimReconciler</h2>
-                <p style="color: var(--text-muted); font-size: 13px; margin: 0;">FinTech Ledger Reconciliation</p>
+        <div class="header-meta">
+            <span><span class="status-dot"></span> WARD_IDLE: 0.00ms</span>
+            <span>REGION: us-east-1</span>
+            <span>SPEC: RFC-2026</span>
+        </div>
+    </header>
+
+    <main>
+        <!-- Metric Overview -->
+        <div class="metric-banner">
+            <div class="metric-card">
+                <span class="metric-label">Idle Burn Rate</span>
+                <span class="metric-value">$0.000<span style="font-size: 13px; color: var(--text-muted); font-weight: normal;"> / hr</span></span>
+                <span class="metric-sub">Zero persistent instances</span>
             </div>
-            <div class="right-align" style="margin-top: 32px;">
-                <p class="data-point counter" data-target="1402">0</p>
-                <p style="color: var(--accent-green); font-size: 13px; margin: 8px 0 0 0; font-weight: 500;">Settled Transactions</p>
+            <div class="metric-card">
+                <span class="metric-label">GrimReconciler Pipeline</span>
+                <span class="metric-value" style="color: var(--accent-green);">1,402</span>
+                <span class="metric-sub">Settled ledger records</span>
+            </div>
+            <div class="metric-card">
+                <span class="metric-label">PhantomGuard Sentry</span>
+                <span class="metric-value" style="color: var(--accent-red);">3</span>
+                <span class="metric-sub">Rogue EC2/RDS neutralized</span>
+            </div>
+            <div class="metric-card">
+                <span class="metric-label">DynamoDB State TTL</span>
+                <span class="metric-value">604,800<span style="font-size: 13px; color: var(--text-muted); font-weight: normal;"> s</span></span>
+                <span class="metric-sub">Auto-purged ledger retention</span>
             </div>
         </div>
 
-        <!-- App 2: 資安哨兵 -->
-        <div class="card">
-            <div>
-                <h2>PhantomGuard</h2>
-                <p style="color: var(--text-muted); font-size: 13px; margin: 0;">DevOps Rogue Instance Sentry</p>
+        <!-- Left Column: GrimReconciler Data Table -->
+        <div class="panel">
+            <div class="panel-header">
+                <div class="panel-title">
+                    <span>GrimReconciler Ledger Pipeline</span>
+                    <span class="panel-tag">apps/grim-reconciler</span>
+                </div>
+                <span style="font-size: 11px; color: var(--text-secondary); font-family: 'JetBrains Mono', monospace;">INGEST: SQS_FIFO</span>
             </div>
-            <div class="right-align" style="margin-top: 32px;">
-                <p class="data-point counter" data-target="3">0</p>
-                <p style="color: var(--accent-red); font-size: 13px; margin: 8px 0 0 0; font-weight: 500;">Instances Terminated</p>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Transaction ID</th>
+                        <th>Settled Amount</th>
+                        <th>Latency</th>
+                        <th>State</th>
+                        <th class="text-right">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="tabular">TX-88492019</td>
+                        <td class="tabular">$1,250.00</td>
+                        <td class="tabular" style="color: var(--text-secondary);">42ms</td>
+                        <td><span class="pill pill-success">SETTLED</span></td>
+                        <td class="tabular text-right" style="color: var(--text-muted);">DynamoDB::Put</td>
+                    </tr>
+                    <tr>
+                        <td class="tabular">TX-88492020</td>
+                        <td class="tabular">$840.50</td>
+                        <td class="tabular" style="color: var(--text-secondary);">38ms</td>
+                        <td><span class="pill pill-success">SETTLED</span></td>
+                        <td class="tabular text-right" style="color: var(--text-muted);">DynamoDB::Put</td>
+                    </tr>
+                    <tr>
+                        <td class="tabular">TX-88492021</td>
+                        <td class="tabular">$3,400.00</td>
+                        <td class="tabular" style="color: var(--text-secondary);">91ms</td>
+                        <td><span class="pill pill-warn">DISCREPANCY</span></td>
+                        <td class="tabular text-right" style="color: var(--text-muted);">Queue::Flagged</td>
+                    </tr>
+                    <tr>
+                        <td class="tabular">TX-88492022</td>
+                        <td class="tabular">$19.99</td>
+                        <td class="tabular" style="color: var(--text-secondary);">31ms</td>
+                        <td><span class="pill pill-success">SETTLED</span></td>
+                        <td class="tabular text-right" style="color: var(--text-muted);">DynamoDB::Put</td>
+                    </tr>
+                </tbody>
+            </table>
+            <div class="control-box">
+                <span style="font-size: 11px; color: var(--text-secondary);">Pre-commit Hook Guard: Active</span>
+                <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--accent-green);">Zero Mirage Persistence Detected</span>
             </div>
         </div>
 
-        <!-- 結界測試展示區 -->
-        <div class="card card-large">
-            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-                <div>
-                    <h2>Anti-Phantom Shield</h2>
-                    <p style="color: var(--text-muted); font-size: 13px; margin: 0;">Test runtime constraints enforced by pre-commit hooks.</p>
+        <!-- Right Column: Sentry Audit Log -->
+        <div class="panel">
+            <div class="panel-header">
+                <div class="panel-title">
+                    <span>PhantomGuard Sentry Stream</span>
+                    <span class="panel-tag" style="background: rgba(255,23,68,0.1); color: var(--accent-red); border-color: rgba(255,23,68,0.2);">apps/phantom-guard</span>
                 </div>
-                <button class="test-btn" onclick="testMiragePersistence()">Trigger Mirage Persistence</button>
             </div>
-            <div id="alert-msg" class="alert-box">
-                > [Aegis Smite] ACCESS DENIED: Unverified client storage write blocked by protocol.
+            <div class="terminal" id="terminalLog">
+                <div class="log-line">
+                    <span class="log-time">12:45:10</span>
+                    <span class="log-tag-guard">[CIRCUIT]</span>
+                    <span>EC2 i-09f1a2 spawned without FinOps tag</span>
+                </div>
+                <div class="log-line">
+                    <span class="log-time">12:45:11</span>
+                    <span class="log-tag-guard">[ACTION]</span>
+                    <span>Termination signal broadcasted ($0.084/hr saved)</span>
+                </div>
+                <div class="log-line">
+                    <span class="log-time">12:50:02</span>
+                    <span class="log-tag-smite">[HOOK]</span>
+                    <span>git diff evaluated: 0 forbidden mock keywords</span>
+                </div>
+                <div class="log-line">
+                    <span class="log-time">12:59:44</span>
+                    <span class="log-tag-guard">[SYS]</span>
+                    <span>FinOps Sentry MCP Server poll: Burn delta $0.00</span>
+                </div>
+                <div class="log-line">
+                    <span class="log-time">13:05:00</span>
+                    <span class="log-tag-guard">[SYS]</span>
+                    <span>Listening on CloudWatch EventBridge pipeline...<span class="cursor"></span></span>
+                </div>
+            </div>
+            <div class="control-box">
+                <div class="toast" id="hookToast">BLOCKED: Aegis Smite intercepted unauthorized client storage.</div>
+                <button class="btn" onclick="triggerSmite()">Simulate Phantom Mock</button>
             </div>
         </div>
-    </div>
+    </main>
 
     <script>
-        // 數字滾動動畫
-        const counters = document.querySelectorAll('.counter');
-        const speed = 200; 
-
-        counters.forEach(counter => {
-            const updateCount = () => {
-                const target = +counter.getAttribute('data-target');
-                const count = +counter.innerText.replace(/,/g, '');
-                const inc = target / speed;
-
-                if (count < target) {
-                    counter.innerText = Math.ceil(count + inc).toLocaleString();
-                    setTimeout(updateCount, 15);
-                } else {
-                    counter.innerText = target.toLocaleString();
-                }
-            };
-            updateCount();
-        });
-
-        // 模擬攔截動畫
-        function testMiragePersistence() {
-            const alertBox = document.getElementById('alert-msg');
-            alertBox.style.display = 'block';
+        function triggerSmite() {
+            const toast = document.getElementById('hookToast');
+            toast.style.display = 'block';
             
-            // 震動效果
-            alertBox.animate([
-                { transform: 'translateX(0)' },
-                { transform: 'translateX(-5px)' },
-                { transform: 'translateX(5px)' },
-                { transform: 'translateX(0)' }
-            ], { duration: 300, iterations: 1 });
+            const term = document.getElementById('terminalLog');
+            const newLog = document.createElement('div');
+            newLog.className = 'log-line';
+            newLog.innerHTML = `<span class="log-time">${new Date().toTimeString().split(' ')[0]}</span><span class="log-tag-smite">[SMITE]</span><span style="color:#ff1744">Pre-commit blocked mock storage attempt</span>`;
+            term.appendChild(newLog);
+            term.scrollTop = term.scrollHeight;
 
-            setTimeout(() => { 
-                alertBox.style.opacity = '0';
-                setTimeout(() => {
-                    alertBox.style.display = 'none';
-                    alertBox.style.opacity = '1';
-                }, 300);
-            }, 3500);
+            setTimeout(() => { toast.style.display = 'none'; }, 3000);
         }
     </script>
 </body>
