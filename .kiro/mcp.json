@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "finops-sentry": {
+      "command": "python3",
+      "args": ["mcp/finops_sentry.py"],
+      "env": {
+        "PYTHONUNBUFFERED": "1"
+      }
+    }
+  }
+}

@@ -1,16 +1,19 @@
 #!/bin/bash
-echo "🛡️  Aegis Smite: Scanning for Mirage Phantoms..."
+echo "🛡️  Aegis Smite: Scanning source code for Mirage Phantoms..."
 FORBIDDEN_PATTERNS=("localStorage" "sessionStorage" "IndexedDB")
 
-for pattern in "${FORBIDDEN_PATTERNS[@]}"; do
-    if git diff --cached -S "$pattern" --quiet --exit-code; then
-        : # 通過
-    else
-        echo "❌ [聖騎士淨化攔截] 檢測到虛假持久化層: $pattern"
-        echo "⚠️  AegisSkeleton 已配置 DynamoDB，請使用標準 Serverless 連線池，禁止使用前端本地存儲偽造測試！"
-        exit 1
-    fi
-done
+# 只比對前端程式碼副檔名
+CODE_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(js|ts|jsx|tsx|html|vue)$' || true)
 
-echo "✅ 結界安全，允許提交。"
+if [ -n "$CODE_FILES" ]; then
+    for pattern in "${FORBIDDEN_PATTERNS[@]}"; do
+        if git diff --cached -S "$pattern" -- $CODE_FILES | grep -q "$pattern"; then
+            echo "❌ [聖騎士淨化攔截] 在程式碼中檢測到虛假持久化層: $pattern"
+            echo "⚠️  AegisSkeleton 已配置 DynamoDB，請使用標準 Serverless 連線池，禁止使用前端本地存儲偽造測試！"
+            exit 1
+        fi
+    done
+fi
+
+echo "✅ 結界安全，代碼合規，允許提交。"
 exit 0

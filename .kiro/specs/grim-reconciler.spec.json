@@ -1,0 +1,10 @@
+{
+  "application": "GrimReconciler",
+  "domain": "FinTech / Zero-Idle Reconciliation",
+  "base_skeleton": "AegisSkeleton",
+  "rules": [
+    "Inherit SQS ingestion queue for transaction ledger intake.",
+    "Persist reconciliation state strictly into DynamoDB with 7-day TTL.",
+    "Zero persistent servers."
+  ]
+}

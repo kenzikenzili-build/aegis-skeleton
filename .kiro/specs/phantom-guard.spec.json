@@ -1,0 +1,10 @@
+{
+  "application": "PhantomGuard",
+  "domain": "DevOps / FinOps Cloud Sentry",
+  "base_skeleton": "AegisSkeleton",
+  "rules": [
+    "Buffer AWS CloudTrail & EventBridge alerts through AegisIngestionQueue.",
+    "Trigger automatic circuit breaking on unbudgeted EC2/RDS resource spikes.",
+    "Store audit trails in DynamoDB Pay-Per-Request."
+  ]
+}
