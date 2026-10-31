@@ -1,0 +1,71 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: AegisSkeleton - Zero-Idle-Cost Guardrailed Micro-Core
+
+Globals:
+  Function:
+    Timeout: 10
+    MemorySize: 256
+    Runtime: python3.12
+    Architectures:
+      - arm64
+
+Resources:
+  # 1. 流量削峰緩衝佇列 (抗殭屍流量防爆)
+  AegisDeadLetterQueue:
+    Type: AWS::SQS::Queue
+
+  AegisIngestionQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      VisibilityTimeout: 30
+      MessageRetentionPeriod: 345600
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt AegisDeadLetterQueue.Arn
+        maxReceiveCount: 3
+
+  # 2. 核心處理函數 (純按需執行，零閒置開銷)
+  AegisCoreFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/functions/
+      Handler: app.lambda_handler
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref AegisStateTable
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref AegisStateTable
+      Events:
+        SQSEvent:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt AegisIngestionQueue.Arn
+            BatchSize: 10
+
+  # 3. 唯一真理狀態庫 (按需計費，帶 TTL 自動清理)
+  AegisStateTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: PK
+          AttributeType: S
+        - AttributeName: SK
+          AttributeType: S
+      KeySchema:
+        - AttributeName: PK
+          KeyType: HASH
+        - AttributeName: SK
+          KeyType: RANGE
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+
+Outputs:
+  QueueUrl:
+    Description: Ingestion SQS Queue URL
+    Value: !Ref AegisIngestionQueue
+  TableArn:
+    Description: DynamoDB State Table ARN
+    Value: !GetAtt AegisStateTable.Arn
