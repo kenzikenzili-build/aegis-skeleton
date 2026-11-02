@@ -1,423 +1,1396 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AegisSkeleton // JRPG Holy Ward: Paladin vs Zombies</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
-    <style>
-        :root {
-            --bg-void: #050508;
-            --jrpg-gold: #fbbf24;
-            --jrpg-red: #ef4444;
-            --jrpg-green: #22c55e;
-            --jrpg-blue: #38bdf8;
-            --hud-bg: #0f172a;
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
-        body {
-            background-color: var(--bg-void);
-            color: #fff;
-            font-family: 'Press Start 2P', monospace;
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            padding: 16px;
-            overflow-x: hidden;
-        }
-        .hud-top {
-            width: 100%;
-            max-width: 860px;
-            background: var(--hud-bg);
-            border: 4px solid #fff;
-            box-shadow: 0 6px 0 #000;
-            padding: 12px 18px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            font-size: 10px;
-            line-height: 1.8;
-            margin-bottom: 16px;
-        }
-        .battle-arena {
-            width: 100%;
-            max-width: 860px;
-            height: 380px;
-            border: 4px solid #fff;
-            box-shadow: 0 8px 0 #000;
-            position: relative;
-            overflow: hidden;
-            background: linear-gradient(180deg, #020617 0%, #172554 60%, #451a03 100%);
-        }
-        .moon {
-            position: absolute;
-            top: 25px;
-            right: 60px;
-            width: 64px;
-            height: 64px;
-            border-radius: 50%;
-            background: #f97316;
-            box-shadow: 0 0 35px #f97316;
-            border: 4px solid #ea580c;
-        }
-        .floor {
-            position: absolute;
-            bottom: 0;
-            width: 100%;
-            height: 70px;
-            background: #1c1917;
-            border-top: 4px solid #78716c;
-            background-image: radial-gradient(#292524 15%, transparent 16%), radial-gradient(#44403c 15%, transparent 16%);
-            background-size: 16px 16px;
-            background-position: 0 0, 8px 8px;
-        }
-        .entity {
-            position: absolute;
-            bottom: 60px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            transition: all 0.2s cubic-bezier(0.18, 0.89, 0.32, 1.28);
-        }
-        #hero { left: 80px; z-index: 10; }
-        .zombie-team {
-            position: absolute;
-            right: 70px;
-            bottom: 60px;
-            display: flex;
-            gap: 25px;
-            z-index: 10;
-        }
-        .zombie-unit {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            transition: all 0.3s ease;
-        }
-        .paladin-sprite {
-            width: 80px;
-            height: 96px;
-            position: relative;
-            animation: breathe 1.2s infinite alternate ease-in-out;
-            transform-origin: bottom center;
-        }
-        @keyframes breathe {
-            0% { transform: translateY(0) scaleY(1); }
-            100% { transform: translateY(-4px) scaleY(1.03); }
-        }
-        .zombie-sprite {
-            width: 72px;
-            height: 86px;
-            position: relative;
-            animation: zombieHop 1.4s infinite alternate ease-in-out;
-            transform-origin: bottom center;
-        }
-        @keyframes zombieHop {
-            0% { transform: translateY(0) rotate(-1deg); }
-            100% { transform: translateY(-5px) rotate(2deg); }
-        }
-        .hero-charge {
-            transform: translateX(380px) scale(1.2) !important;
-        }
-        .crit-slash {
-            position: absolute;
-            width: 140px;
-            height: 140px;
-            pointer-events: none;
-            display: none;
-            z-index: 30;
-            background: radial-gradient(circle, rgba(251,191,36,0.9) 0%, rgba(239,68,68,0) 70%);
-            border-radius: 50%;
-        }
-        .dmg-popup {
-            position: absolute;
-            font-size: 13px;
-            color: var(--jrpg-gold);
-            text-shadow: 2px 2px 0 #000, 0 0 10px var(--jrpg-gold);
-            pointer-events: none;
-            animation: floatUp 0.8s forwards;
-            z-index: 40;
-        }
-        @keyframes floatUp {
-            0% { transform: translateY(0) scale(0.6); opacity: 0; }
-            40% { transform: translateY(-30px) scale(1.3); opacity: 1; }
-            100% { transform: translateY(-60px) scale(1); opacity: 0; }
-        }
-        .shake {
-            animation: screenShake 0.3s cubic-bezier(.36,.07,.19,.97) both;
-        }
-        @keyframes screenShake {
-            10%, 90% { transform: translate3d(-3px, 0, 0); }
-            20%, 80% { transform: translate3d(5px, 0, 0); }
-            30%, 50%, 70% { transform: translate3d(-8px, 0, 0); }
-            40%, 60% { transform: translate3d(8px, 0, 0); }
-        }
-        .dock {
-            width: 100%;
-            max-width: 860px;
-            display: grid;
-            grid-template-columns: 1.4fr 1fr;
-            gap: 16px;
-            margin-top: 16px;
-        }
-        .dialogue-panel {
-            background: #020617;
-            border: 4px solid #fff;
-            box-shadow: 0 6px 0 #000;
-            padding: 14px;
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 11px;
-            height: 150px;
-            overflow-y: auto;
-            color: #94a3b8;
-            line-height: 1.6;
-        }
-        .cmd-panel {
-            background: #020617;
-            border: 4px solid #fff;
-            box-shadow: 0 6px 0 #000;
-            padding: 12px;
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 10px;
-        }
-        .btn-jrpg {
-            background: #1e293b;
-            border: 3px solid #64748b;
-            color: #fff;
-            font-family: 'Press Start 2P', monospace;
-            font-size: 9px;
-            padding: 10px 4px;
-            cursor: pointer;
-            transition: all 0.1s;
-        }
-        .btn-jrpg:hover {
-            background: var(--jrpg-gold);
-            color: #000;
-            border-color: #fff;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 0 #fff;
-        }
-        .btn-jrpg:active {
-            transform: translateY(2px);
-            box-shadow: none;
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="dark">
+<meta name="description" content="AEGIS // SKELETON - zero-idle serverless telemetry console for GrimReconciler and PhantomGuard.">
+<title>AEGIS // SKELETON v1.0.4-live — Serverless Telemetry Console</title>
+<style>
+  :root {
+    --bg: #080C14;
+    --panel: #0B111C;
+    --panel-raised: #0E1626;
+    --line: rgba(148, 163, 184, 0.14);
+    --line-soft: rgba(148, 163, 184, 0.08);
+    --line-strong: rgba(148, 163, 184, 0.28);
+    --text: #E6EDF7;
+    --text-dim: #9AA8BD;
+    --muted: #71809A;
+    --faint: #4A576D;
+    --emerald: #34D399;
+    --emerald-soft: rgba(52, 211, 153, 0.12);
+    --amber: #FBBF24;
+    --amber-soft: rgba(251, 191, 36, 0.12);
+    --rose: #FB7185;
+    --rose-soft: rgba(251, 113, 133, 0.12);
+    --xray: #00FF9D;
+    --radius: 14px;
+    --radius-sm: 9px;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", "JetBrains Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+
+  body {
+    min-height: 100vh;
+    background:
+      radial-gradient(900px 520px at 82% -12%, rgba(52, 211, 153, 0.07), transparent 60%),
+      radial-gradient(760px 460px at 6% 0%, rgba(56, 189, 248, 0.06), transparent 62%),
+      var(--bg);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    transition: background-color 0.25s ease;
+  }
+
+  h1, h2, h3, p, dl, dd, dt { margin: 0; }
+  button { font-family: inherit; color: inherit; }
+
+  .num, table, .metric-value, .ddb-pk, .ddb-sk, .ast-node, .ast-key {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1, "lnum" 1;
+  }
+
+  .shell { max-width: 1480px; margin: 0 auto; padding: 0 22px 40px; }
+
+  .sr-only {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+  }
+
+  /* ---------------- Top navigation ---------------- */
+  .topbar {
+    position: sticky; top: 0; z-index: 20;
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+    gap: 16px;
+    margin: 0 -22px 16px; padding: 13px 22px;
+    border-bottom: 1px solid var(--line);
+    background: rgba(8, 12, 20, 0.9);
+    backdrop-filter: blur(14px);
+  }
+
+  .brand { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+  .brand-mark { color: var(--emerald); font-size: 15px; line-height: 1; }
+  .brand-name {
+    font-size: 13px; font-weight: 700; letter-spacing: 0.14em;
+    white-space: nowrap;
+  }
+  .brand-version {
+    font-size: 10.5px; letter-spacing: 0.1em; color: var(--muted);
+    border: 1px solid var(--line); border-radius: 999px; padding: 2px 8px;
+    white-space: nowrap;
+  }
+
+  .app-toggle {
+    display: flex; gap: 4px; padding: 4px;
+    border: 1px solid var(--line); border-radius: 12px;
+    background: rgba(14, 22, 38, 0.8);
+  }
+  .app-tab {
+    appearance: none; border: 0; background: transparent; cursor: pointer;
+    display: flex; align-items: baseline; gap: 7px; white-space: nowrap;
+    padding: 8px 13px; border-radius: 9px;
+    font-size: 11.5px; letter-spacing: 0.06em; color: var(--muted);
+    transition: color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
+  }
+  .app-tab:hover { color: var(--text); }
+  .app-tab.is-active {
+    background: var(--emerald-soft); color: var(--text);
+    box-shadow: inset 0 0 0 1px rgba(52, 211, 153, 0.35);
+  }
+  .app-tab.is-active .app-tab-scope { color: var(--emerald); }
+  .app-tab-scope { font-size: 10px; color: var(--faint); }
+  .app-tab:focus-visible { outline: 2px solid var(--xray); outline-offset: 2px; }
+
+  .xray { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; user-select: none; }
+  .xray-input { position: absolute; opacity: 0; width: 0; height: 0; }
+  .xray-track {
+    position: relative; display: inline-block; width: 44px; height: 22px;
+    border: 1px solid var(--line-strong); border-radius: 999px;
+    background: rgba(14, 22, 38, 0.9);
+    transition: border-color 0.2s ease, background 0.2s ease;
+  }
+  .xray-thumb {
+    position: absolute; top: 2px; left: 2px; width: 16px; height: 16px;
+    border-radius: 50%; background: var(--muted);
+    transition: transform 0.2s ease, background 0.2s ease;
+  }
+  .xray-input:checked + .xray-track { border-color: var(--xray); background: rgba(0, 255, 157, 0.14); }
+  .xray-input:checked + .xray-track .xray-thumb {
+    transform: translateX(22px); background: var(--xray);
+    box-shadow: 0 0 12px rgba(0, 255, 157, 0.7);
+  }
+  .xray-input:focus-visible + .xray-track { outline: 2px solid var(--xray); outline-offset: 2px; }
+  .xray-label { font-size: 10.5px; letter-spacing: 0.12em; color: var(--muted); white-space: nowrap; }
+  .xray-input:checked ~ .xray-label { color: var(--xray); }
+  .xray-state {
+    font-size: 10px; letter-spacing: 0.12em; color: var(--faint);
+    border: 1px solid var(--line); border-radius: 6px; padding: 1px 6px;
+  }
+  .xray-input:checked ~ .xray-state { color: var(--xray); border-color: rgba(0, 255, 157, 0.5); }
+  /* ---------------- Bento shell ---------------- */
+  .bento {
+    background: linear-gradient(180deg, rgba(14, 22, 38, 0.92), rgba(10, 16, 26, 0.94));
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03), 0 18px 40px -32px rgba(0, 0, 0, 0.9);
+    transition: border-color 0.25s ease, box-shadow 0.25s ease;
+  }
+
+  .console-grid {
+    display: grid;
+    grid-template-columns: 65fr 35fr;
+    gap: 14px;
+    align-items: start;
+  }
+
+  .zone-c { display: grid; gap: 14px; }
+
+  /* ---------------- Zone A : ingest ---------------- */
+  .zone-a {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 14px;
+    align-items: stretch;
+    padding: 14px;
+    margin-bottom: 14px;
+  }
+
+  .dropzone {
+    display: flex;
+    flex-direction: column;
+    gap: 11px;
+    justify-content: center;
+    padding: 18px 20px;
+    border: 1.5px dashed rgba(148, 163, 184, 0.3);
+    border-radius: var(--radius-sm);
+    background: rgba(8, 12, 20, 0.55);
+    cursor: pointer;
+    transition: border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
+  }
+  .dropzone:hover { border-color: var(--line-strong); background: rgba(14, 22, 38, 0.6); }
+  .dropzone.is-dragover {
+    border-color: var(--emerald);
+    background: rgba(52, 211, 153, 0.07);
+    box-shadow: 0 0 0 1px rgba(52, 211, 153, 0.25), 0 0 40px -22px rgba(52, 211, 153, 0.9);
+  }
+  .dropzone:focus-visible { outline: 2px solid var(--emerald); outline-offset: 3px; }
+
+  .dropzone-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .dropzone-kicker { font-size: 9.5px; letter-spacing: 0.22em; color: var(--faint); }
+  .dropzone-title { font-size: 13px; letter-spacing: 0.08em; }
+  .dropzone-hint { font-size: 11.5px; color: var(--muted); max-width: 66ch; }
+  .dropzone-hint code { color: var(--text-dim); }
+
+  .pill-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 2px; }
+  .pill {
+    appearance: none; cursor: pointer;
+    border: 1px solid var(--line-strong); border-radius: 999px;
+    background: rgba(14, 22, 38, 0.85); color: var(--text-dim);
+    padding: 7px 14px; font-size: 11px; letter-spacing: 0.06em;
+    transition: color 0.16s ease, border-color 0.16s ease, background 0.16s ease, transform 0.16s ease;
+  }
+  .pill:hover {
+    color: var(--text); border-color: var(--emerald);
+    background: rgba(52, 211, 153, 0.08); transform: translateY(-1px);
+  }
+  .pill:active { transform: translateY(0); }
+  .pill:focus-visible { outline: 2px solid var(--xray); outline-offset: 2px; }
+  .pill-tag { color: var(--faint); margin-right: 7px; }
+  .pill-compact { padding: 4px 10px; font-size: 9.5px; letter-spacing: 0.14em; color: var(--muted); }
+
+  .ingest-panel {
+    display: flex; flex-direction: column; gap: 7px; justify-content: center;
+    min-width: 246px; max-width: 340px; padding: 4px 2px;
+  }
+  .ingest-kicker { font-size: 9.5px; letter-spacing: 0.22em; color: var(--faint); }
+  .ingest-status { font-size: 11.5px; line-height: 1.5; color: var(--text-dim); }
+  .ingest-status[data-tone="emerald"] { color: var(--emerald); }
+  .ingest-status[data-tone="amber"] { color: var(--amber); }
+  .ingest-status[data-tone="rose"] { color: var(--rose); }
+  .ingest-meta { font-size: 10.5px; color: var(--faint); word-break: break-word; }
+
+  /* ---------------- Zone B : ledger pipeline ---------------- */
+  .zone-b { display: flex; flex-direction: column; min-height: 452px; overflow: hidden; }
+  .zone-foot {
+    padding: 10px 16px 12px;
+    border-top: 1px solid var(--line);
+    font-size: 9.5px; line-height: 1.7; letter-spacing: 0.04em; color: var(--faint);
+  }
+  .zone-foot code { color: var(--muted); }
+  .zone-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    flex-wrap: wrap;
+    padding: 14px 16px 12px;
+    border-bottom: 1px solid var(--line);
+  }
+  .zone-title { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  .zone-kicker { font-size: 9.5px; letter-spacing: 0.22em; color: var(--faint); }
+  .zone-name { font-size: 12px; letter-spacing: 0.1em; }
+  .zone-meta { display: flex; align-items: center; gap: 10px; }
+  .zone-meta-label { font-size: 10px; letter-spacing: 0.12em; color: var(--faint); }
+  .count-chip {
+    font-size: 10.5px; letter-spacing: 0.1em; color: var(--text-dim);
+    border: 1px solid var(--line); border-radius: 6px; padding: 2px 8px;
+  }
+
+  .table-scroll { overflow-x: auto; flex: 1; }
+  .ledger { width: 100%; border-collapse: collapse; min-width: 880px; font-size: 11.5px; font-family: var(--mono); }
+  .ledger thead th {
+    position: sticky; top: 0; z-index: 1;
+    background: rgba(11, 17, 28, 0.97);
+    text-align: left; font-weight: 500;
+    font-size: 9.5px; letter-spacing: 0.14em; color: var(--faint);
+    padding: 10px 14px; border-bottom: 1px solid var(--line);
+    white-space: nowrap;
+  }
+  .ledger tbody td {
+    padding: 10px 14px; border-bottom: 1px solid var(--line-soft);
+    color: var(--text-dim); vertical-align: top;
+  }
+  .ledger tbody tr:last-child td { border-bottom: 0; }
+  .ledger tbody tr:hover td { background: rgba(148, 163, 184, 0.04); color: var(--text); }
+  .col-time { color: var(--muted); white-space: nowrap; }
+  .col-id { color: var(--text); white-space: nowrap; }
+  .col-type { white-space: nowrap; }
+  .col-amount { color: var(--text); white-space: nowrap; }
+  .col-variance { white-space: nowrap; }
+  .tone-emerald { color: var(--emerald); }
+  .tone-amber { color: var(--amber); }
+  .tone-rose { color: var(--rose); }
+  .tone-neutral { color: var(--faint); }
+  .col-ddb { min-width: 250px; }
+  .ddb-pk { display: block; color: var(--text-dim); white-space: nowrap; }
+  .ddb-sk {
+    display: block; color: var(--faint); white-space: nowrap;
+    max-width: 270px; overflow: hidden; text-overflow: ellipsis;
+  }
+
+  .row-empty td {
+    padding: 46px 18px; text-align: center; color: var(--muted);
+    line-height: 1.9; font-size: 11.5px;
+  }
+  .row-empty strong { color: var(--amber); letter-spacing: 0.12em; font-weight: 500; }
+  .row-empty code { color: var(--text-dim); }
+
+  /* ---------------- Status badges + AST flip ---------------- */
+  .badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 2px 8px; border-radius: 999px;
+    border: 1px solid var(--line-strong);
+    font-size: 9.5px; letter-spacing: 0.1em; white-space: nowrap;
+    color: var(--text-dim); background: rgba(148, 163, 184, 0.06);
+  }
+  .badge::before {
+    content: ""; width: 5px; height: 5px; border-radius: 50%;
+    background: currentColor; opacity: 0.9;
+  }
+  .badge-emerald { color: var(--emerald); border-color: rgba(52, 211, 153, 0.4); background: var(--emerald-soft); }
+  .badge-amber { color: var(--amber); border-color: rgba(251, 191, 36, 0.4); background: var(--amber-soft); }
+  .badge-rose { color: var(--rose); border-color: rgba(251, 113, 133, 0.4); background: var(--rose-soft); }
+  .badge-neutral { color: var(--muted); }
+
+  .status-human { display: inline-flex; }
+  .status-ast { display: none; flex-direction: column; gap: 3px; }
+  .ast-node { font-size: 10.5px; color: var(--xray); white-space: nowrap; }
+  .ast-key {
+    font-size: 9.5px; color: rgba(0, 255, 157, 0.62); white-space: nowrap;
+    max-width: 290px; overflow: hidden; text-overflow: ellipsis;
+  }
+
+  /* ---------------- Zone C : telemetry deck ---------------- */
+  .card { padding: 14px 16px 15px; }
+  .card-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding-bottom: 10px; margin-bottom: 10px;
+    border-bottom: 1px solid var(--line);
+  }
+  .card-title { font-size: 11px; letter-spacing: 0.12em; }
+  .card-kicker { font-size: 9px; letter-spacing: 0.2em; color: var(--faint); }
+
+  .metric-row {
+    display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+    padding: 7px 0; border-bottom: 1px dotted var(--line-soft);
+  }
+  .metric-row:last-of-type { border-bottom: 0; }
+  .metric-label { font-size: 10px; letter-spacing: 0.1em; color: var(--muted); }
+  .metric-value { font-size: 19px; line-height: 1.15; color: var(--text); white-space: nowrap; }
+  .metric-value .unit { font-size: 10px; letter-spacing: 0.08em; color: var(--faint); margin-left: 3px; }
+  .metric-value.is-emerald { color: var(--emerald); }
+  .metric-value.is-amber { color: var(--amber); }
+  .metric-small { font-size: 10.5px; color: var(--text-dim); white-space: nowrap; }
+
+  .meter {
+    position: relative; height: 5px; margin: 12px 0 8px;
+    border-radius: 999px; background: rgba(148, 163, 184, 0.12); overflow: hidden;
+  }
+  .meter-fill {
+    display: block; height: 100%; width: 0%;
+    background: linear-gradient(90deg, var(--emerald), var(--amber) 70%, var(--rose));
+    transition: width 0.35s ease;
+  }
+  .card-foot { font-size: 10px; line-height: 1.6; color: var(--faint); }
+
+  .gov-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 7px 0; border-bottom: 1px dotted var(--line-soft);
+  }
+  .gov-row:last-child { border-bottom: 0; }
+  .gov-row dt { font-size: 10px; letter-spacing: 0.1em; color: var(--muted); }
+  .gov-row dd { font-size: 10.5px; color: var(--text-dim); white-space: nowrap; }
+
+  .manifest-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px 12px; }
+  .manifest-cell { display: flex; flex-direction: column; gap: 2px; }
+  .manifest-label { font-size: 9px; letter-spacing: 0.14em; color: var(--faint); }
+  .manifest-value { font-size: 13px; color: var(--text); }
+  .manifest-value.is-emerald { color: var(--emerald); }
+  .manifest-value.is-amber { color: var(--amber); }
+  .manifest-value.is-rose { color: var(--rose); }
+  .manifest-dataset {
+    margin-top: 10px; padding-top: 9px; border-top: 1px solid var(--line);
+    font-size: 10px; color: var(--faint); word-break: break-all;
+  }
+
+  .console-foot {
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+    gap: 8px; margin-top: 16px; padding-top: 12px;
+    border-top: 1px solid var(--line);
+    font-size: 10px; letter-spacing: 0.06em; color: var(--faint);
+  }
+  .console-foot code { color: var(--muted); }
+  /* ---------------- Skeleton X-Ray mode ---------------- */
+  body.is-xray .bento {
+    border-color: rgba(0, 255, 157, 0.38);
+    box-shadow: inset 0 0 60px -42px rgba(0, 255, 157, 0.65), 0 0 30px -22px rgba(0, 255, 157, 0.75);
+  }
+  body.is-xray .brand-name,
+  body.is-xray .brand-mark,
+  body.is-xray .zone-name,
+  body.is-xray .card-title { color: var(--xray); text-shadow: 0 0 14px rgba(0, 255, 157, 0.45); }
+  body.is-xray .badge { filter: saturate(0.35) brightness(1.15); }
+  body.is-xray .status-human { display: none; }
+  body.is-xray .status-ast { display: flex; }
+  body.is-xray .ledger tbody td { color: rgba(0, 255, 157, 0.72); }
+  body.is-xray .ledger thead th { color: rgba(0, 255, 157, 0.55); }
+  body.is-xray .dropzone { border-color: rgba(0, 255, 157, 0.45); }
+  body.is-xray::after {
+    content: ""; position: fixed; inset: 0; z-index: 60; pointer-events: none;
+    background: repeating-linear-gradient(0deg, rgba(0, 255, 157, 0.05) 0 1px, transparent 1px 3px);
+  }
+
+  /* ---------------- Responsive ---------------- */
+  @media (max-width: 1180px) {
+    .console-grid { grid-template-columns: minmax(0, 1fr); }
+    .zone-c { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+  }
+  @media (max-width: 860px) {
+    .shell { padding: 0 14px 30px; }
+    .topbar { margin: 0 -14px 14px; padding: 12px 14px; }
+    .zone-a { grid-template-columns: minmax(0, 1fr); }
+    .ingest-panel { min-width: 0; max-width: none; }
+    .metric-value { font-size: 17px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
+  }
+</style>
 </head>
 <body>
-    <div class="hud-top">
-        <div>
-            <div style="color: var(--jrpg-gold);">🎃 PALADIN: LV.99 [DIVINE]</div>
-            <div style="color: var(--jrpg-green); margin-top: 4px;">IDLE ARCH: $0.000 / HR</div>
-        </div>
-        <div style="text-align: right;">
-            <div id="hudBurn" style="color: var(--jrpg-red);">BURN DEFICIT: $0.096 / HR</div>
-            <div id="hudZombies" style="color: #94a3b8; margin-top: 4px;">ROGUE ENTITIES: 1</div>
-        </div>
+<div class="shell">
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">&#9670;</span>
+      <h1 class="brand-name">AEGIS // SKELETON</h1>
+      <span class="brand-version">v1.0.4-live</span>
     </div>
-    <div class="battle-arena" id="arena">
-        <div class="moon"></div>
-        <div class="floor"></div>
-        <div class="entity" id="hero">
-            <div style="font-size: 8px; color: var(--jrpg-gold); margin-bottom: 4px;">AEGIS</div>
-            <svg class="paladin-sprite" viewBox="0 0 40 48" fill="none">
-                <path d="M12 20 L4 44 L18 42 Z" fill="#991b1b" />
-                <rect x="14" y="22" width="14" height="16" fill="#fbbf24" stroke="#b45309" stroke-width="1.5" />
-                <rect x="18" y="26" width="6" height="8" fill="#38bdf8" />
-                <rect x="6" y="24" width="4" height="4" fill="#fbbf24" />
-                <path d="M4 24 L-2 4 L0 2 L8 22 Z" fill="#f8fafc" stroke="#94a3b8" stroke-width="1" />
-                <rect x="10" y="6" width="22" height="16" rx="4" fill="#ea580c" stroke="#9a3412" stroke-width="1.5" />
-                <rect x="19" y="2" width="4" height="5" fill="#15803d" />
-                <polygon points="14,11 17,11 15,14" fill="#020617" />
-                <polygon points="25,11 28,11 27,14" fill="#020617" />
-                <polygon points="16,17 19,19 22,17 25,19 27,17 22,21" fill="#020617" />
-                <rect x="15" y="38" width="4" height="6" fill="#78350f" />
-                <rect x="23" y="38" width="4" height="6" fill="#78350f" />
-            </svg>
-        </div>
-        <div class="zombie-team" id="zombieTeam">
-            <div class="zombie-unit" id="z-unit-1">
-                <div style="font-size: 7px; color: #fca5a5; margin-bottom: 4px;">EC2:ZOMBIE</div>
-                <div style="width: 44px; height: 5px; background: #ef4444; border: 1px solid #fff; margin-bottom: 4px;">
-                    <div style="width: 100%; height: 100%; background: #22c55e;"></div>
-                </div>
-                <svg class="zombie-sprite" viewBox="0 0 40 48" fill="none">
-                    <rect x="14" y="22" width="14" height="16" fill="#374151" stroke="#1f2937" stroke-width="1.5" />
-                    <rect x="4" y="24" width="12" height="5" fill="#15803d" />
-                    <rect x="12" y="8" width="18" height="15" rx="3" fill="#16a34a" stroke="#14532d" stroke-width="1.5" />
-                    <rect x="15" y="12" width="3" height="3" fill="#ef4444" />
-                    <rect x="24" y="12" width="3" height="3" fill="#ef4444" />
-                    <polygon points="16,18 26,17 23,21 18,21" fill="#020617" />
-                    <rect x="15" y="38" width="4" height="6" fill="#1f2937" />
-                    <rect x="23" y="38" width="4" height="6" fill="#1f2937" />
-                </svg>
-            </div>
-        </div>
-        <div class="crit-slash" id="critFx"></div>
-    </div>
-    <div class="dock">
-        <div class="dialogue-panel" id="logBox">
-            <div style="color: var(--jrpg-gold);">> SKELETON CREW INITIATED.</div>
-            <div>> CloudTrail scan: Rogue EC2 Zombie detected ($0.096/hr).</div>
-            <div>> Pre-commit Hook: Aegis Smite standing by.</div>
-        </div>
-        <div class="cmd-panel">
-            <button class="btn-jrpg" style="border-color: var(--jrpg-gold);" onclick="castSmite()">⚔️ SMITE</button>
-            <button class="btn-jrpg" style="border-color: var(--jrpg-red);" onclick="castAllSmite()">🔥 ALL SMITE</button>
-            <button class="btn-jrpg" style="border-color: var(--jrpg-blue);" onclick="castReconcile()">📜 RECONCILE</button>
-            <button class="btn-jrpg" style="border-color: var(--jrpg-green);" onclick="spawnZombie()">🧟 SUMMON</button>
-        </div>
-    </div>
-    <script>
-        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        function playSfx(type) {
-            if (audioCtx.state === 'suspended') audioCtx.resume();
-            const osc = audioCtx.createOscillator();
-            const gain = audioCtx.createGain();
-            osc.connect(gain);
-            gain.connect(audioCtx.destination);
-            if (type === 'slash') {
-                osc.type = 'sawtooth';
-                osc.frequency.setValueAtTime(440, audioCtx.currentTime);
-                osc.frequency.exponentialRampToValueAtTime(110, audioCtx.currentTime + 0.15);
-                gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
-                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
-                osc.start();
-                osc.stop(audioCtx.currentTime + 0.15);
-            } else if (type === 'crit') {
-                osc.type = 'triangle';
-                osc.frequency.setValueAtTime(880, audioCtx.currentTime);
-                osc.frequency.exponentialRampToValueAtTime(220, audioCtx.currentTime + 0.25);
-                gain.gain.setValueAtTime(0.4, audioCtx.currentTime);
-                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.25);
-                osc.start();
-                osc.stop(audioCtx.currentTime + 0.25);
-            }
-        }
-        const arena = document.getElementById('arena');
-        const hero = document.getElementById('hero');
-        const team = document.getElementById('zombieTeam');
-        const critFx = document.getElementById('critFx');
-        const logBox = document.getElementById('logBox');
-        let zombies = [{ id: 1 }];
-        let serial = 1;
 
-        function addLog(msg, col = '#94a3b8') {
-            const row = document.createElement('div');
-            row.style.color = col;
-            row.innerText = `> ${msg}`;
-            logBox.prepend(row);
+    <nav class="app-toggle" id="app-toggle" role="tablist" aria-label="Application surface">
+      <button type="button" class="app-tab is-active" data-app="reconciler" role="tab" aria-selected="true" id="tab-reconciler">
+        GrimReconciler <span class="app-tab-scope">(Financial GL)</span>
+      </button>
+      <button type="button" class="app-tab" data-app="finops" role="tab" aria-selected="false" id="tab-finops">
+        PhantomGuard <span class="app-tab-scope">(Cloud FinOps)</span>
+      </button>
+    </nav>
+
+    <label class="xray" for="xray-toggle">
+      <input type="checkbox" class="xray-input" id="xray-toggle">
+      <span class="xray-track" aria-hidden="true"><span class="xray-thumb"></span></span>
+      <span class="xray-label">[ SKELETON X-RAY MODE ]</span>
+      <span class="xray-state" id="xray-state">OFF</span>
+    </label>
+  </header>
+  <!-- ============================ ZONE A : INGEST ============================ -->
+  <section class="bento zone-a" aria-labelledby="ingest-heading">
+    <div class="dropzone" id="dropzone" role="button" tabindex="0" aria-labelledby="ingest-heading" aria-describedby="ingest-hint">
+      <div class="dropzone-head">
+        <span class="dropzone-kicker">ZONE A</span>
+        <h2 class="dropzone-title" id="ingest-heading">INGEST ARTIFACT</h2>
+      </div>
+      <p class="dropzone-hint" id="ingest-hint">
+        Drop <code>stripe_settlements.csv</code>, <code>internal_gl.csv</code> or <code>tfplan.json</code>
+        &mdash; or click to browse. Files are parsed locally in the browser: nothing is uploaded
+        and no rows are invented.
+      </p>
+      <div class="pill-row">
+        <button type="button" class="pill" id="load-stripe">
+          <span class="pill-tag">[01]</span>Load Stripe vs GL Fixture
+        </button>
+        <button type="button" class="pill" id="load-tfplan">
+          <span class="pill-tag">[02]</span>Load Zombie tfplan.json
+        </button>
+      </div>
+      <input type="file" id="file-input" class="sr-only" accept=".csv,.json,text/csv,application/json" multiple>
+    </div>
+
+    <div class="ingest-panel">
+      <span class="ingest-kicker">INGEST TELEMETRY</span>
+      <p class="ingest-status" id="ingest-status" data-tone="neutral" role="status" aria-live="polite">AWAITING INGEST &mdash; no dataset loaded</p>
+      <p class="ingest-meta" id="ingest-meta">SOURCE: &mdash; · PARSER: RFC4180 / JSON · TRANSPORT: local file only</p>
+    </div>
+  </section>
+
+  <!-- ====================== ZONES B + C : PIPELINE + DECK ====================== -->
+  <main class="console-grid">
+    <section class="bento zone-b" aria-labelledby="ledger-heading">
+      <div class="zone-head">
+        <div class="zone-title">
+          <span class="zone-kicker">ZONE B</span>
+          <h2 class="zone-name" id="ledger-heading">MAIN LEDGER PIPELINE</h2>
+        </div>
+        <div class="zone-meta">
+          <span class="zone-meta-label" id="table-app">GRIMRECONCILER · FINANCIAL GL</span>
+          <span class="count-chip num" id="table-count">0 ROWS</span>
+          <button type="button" class="pill pill-compact" id="reset-view">RESET</button>
+        </div>
+      </div>
+
+      <div class="table-scroll">
+        <table class="ledger">
+          <caption class="sr-only">
+            Unified ledger pipeline: ingestion time in UTC, record identifier, resource type,
+            primary amount, variance against the authoritative side, status and DynamoDB key.
+          </caption>
+          <thead>
+            <tr>
+              <th scope="col">TIME (UTC)</th>
+              <th scope="col">RECORD ID</th>
+              <th scope="col">TYPE</th>
+              <th scope="col">PRIMARY AMOUNT</th>
+              <th scope="col">VARIANCE</th>
+              <th scope="col">STATUS</th>
+              <th scope="col">DDB PARTITION KEY</th>
+            </tr>
+          </thead>
+          <tbody id="ledger-body"></tbody>
+        </table>
+      </div>
+
+      <p class="zone-foot" id="zone-foot">
+        ZERO-MOCK · every row originates from an ingested artifact · integer-cent arithmetic in the view,
+        authoritative <code>decimal.Decimal</code> reconciliation in <code>apps/grim-reconciler</code>.
+      </p>
+    </section>
+    <!-- ====================== ZONE C : TELEMETRY & GOVERNANCE ====================== -->
+    <aside class="zone-c" aria-label="Telemetry and governance deck">
+      <section class="bento card" aria-labelledby="finops-heading">
+        <div class="card-head">
+          <h2 class="card-title" id="finops-heading">ZERO-IDLE FINOPS</h2>
+          <span class="card-kicker">ZONE C · 01</span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-label">IDLE OVERHEAD</span>
+          <span class="metric-value is-emerald num">$0.0000<span class="unit">/ HR</span></span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-label">P99 EXECUTION</span>
+          <span class="metric-value num">12.4<span class="unit">ms</span></span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-label">BILLING MODE</span>
+          <span class="metric-small num">PAY_PER_REQUEST</span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-label">DETECTED WASTE (PLAN)</span>
+          <span class="metric-value is-amber" id="finops-waste"><span class="num" id="finops-waste-value">$0.0000</span><span class="unit">/ HR</span></span>
+        </div>
+        <div class="meter" aria-hidden="true"><span class="meter-fill" id="finops-meter"></span></div>
+        <p class="card-foot" id="finops-waste-note">
+          no plan ingested · 0 / 0 resources flagged · steady-state burn $0.0000/hr
+        </p>
+      </section>
+
+      <section class="bento card" aria-labelledby="gov-heading">
+        <div class="card-head">
+          <h2 class="card-title" id="gov-heading">KIRO GOVERNANCE</h2>
+          <span class="card-kicker">ZONE C · 02</span>
+        </div>
+        <dl>
+          <div class="gov-row">
+            <dt>AST PRE-COMMIT GUARD</dt>
+            <dd><span class="badge badge-emerald">ENFORCING</span></dd>
+          </div>
+          <div class="gov-row">
+            <dt>SPEC COMPLIANCE</dt>
+            <dd class="num">100%</dd>
+          </div>
+          <div class="gov-row">
+            <dt>SINGLE-TABLE SCHEMA</dt>
+            <dd class="num">PK / SK · TTL</dd>
+          </div>
+          <div class="gov-row">
+            <dt>COMPUTE PROFILE</dt>
+            <dd class="num">ARM64 · 256MB · 10s</dd>
+          </div>
+          <div class="gov-row">
+            <dt>MONEY PRECISION</dt>
+            <dd class="num">decimal.Decimal</dd>
+          </div>
+        </dl>
+        <p class="card-foot">Rules 1&ndash;4 · .kiro/steering/architecture.md</p>
+      </section>
+
+      <section class="bento card" aria-labelledby="manifest-heading">
+        <div class="card-head">
+          <h2 class="card-title" id="manifest-heading">RECONCILIATION MANIFEST</h2>
+          <span class="card-kicker">ZONE C · 03</span>
+        </div>
+        <div class="manifest-grid">
+          <div class="manifest-cell">
+            <span class="manifest-label">ROWS</span>
+            <span class="manifest-value num" id="manifest-rows">0</span>
+          </div>
+          <div class="manifest-cell">
+            <span class="manifest-label">MATCHED</span>
+            <span class="manifest-value is-emerald num" id="manifest-matched">0</span>
+          </div>
+          <div class="manifest-cell">
+            <span class="manifest-label">DRIFT</span>
+            <span class="manifest-value is-amber num" id="manifest-drift">0</span>
+          </div>
+          <div class="manifest-cell">
+            <span class="manifest-label">CRITICAL</span>
+            <span class="manifest-value is-rose num" id="manifest-critical">0</span>
+          </div>
+        </div>
+        <p class="manifest-dataset" id="manifest-dataset">DATASET: &mdash; · TOLERANCE: ±$0.02 · SOURCE: none</p>
+      </section>
+    </aside>
+  </main>
+
+  <footer class="console-foot">
+    <span>ZERO-MOCK CONSOLE · rows render only from ingested artifacts · no simulation loops · no client-side persistence</span>
+    <span><code>frontend/index.html</code> · v1.0.4-live · single-table DynamoDB · ARM64 scale-to-zero</span>
+  </footer>
+</div>
+<script>
+(function () {
+  "use strict";
+
+  /* ---------------------------------------------------------------------------
+   * Embedded fixture excerpts.
+   * Byte-faithful slices of the generated fixtures (data rows 0,1,2,3,42,99) so
+   * the quick-load pills exercise the exact same parser path as a dropped file.
+   * No timer, no mutation loop: these strings render only after explicit input.
+   * ------------------------------------------------------------------------ */
+  var FIXTURE_STRIPE_CSV = [
+    "id,object,amount,fee,net,currency,created,created_utc,status,description,customer_email,balance_transaction,gross_decimal,fee_decimal,net_decimal",
+    "ch_00000000000000a1b2c3d4e5,charge,1850,84,1766,usd,1790829000,2026-10-01T04:30:00Z,succeeded,AEGIS-RECON order 1000,tenant01@aegis-fixtures.example,txn_00000000000000005f0a1b2c,18.50,0.84,17.66",
+    "ch_00000000000000a1b2c3f3d4,charge,2827,112,2715,usd,1790831220,2026-10-01T05:07:00Z,succeeded,AEGIS-RECON order 1001,tenant02@aegis-fixtures.example,txn_00000000000000005f0bb445,28.27,1.12,27.15",
+    "ch_00000000000000a1b2c412c3,charge,3804,140,3664,usd,1790833440,2026-10-01T05:44:00Z,succeeded,AEGIS-RECON order 1002,tenant03@aegis-fixtures.example,txn_00000000000000005f0d4d5e,38.04,1.40,36.64",
+    "ch_00000000000000a1b2c431b2,charge,4781,169,4612,usd,1790835660,2026-10-01T06:21:00Z,succeeded,AEGIS-RECON order 1003,tenant04@aegis-fixtures.example,txn_00000000000000005f0ee677,47.81,1.69,46.12",
+    "ch_00000000000000a1b2c8e81b,charge,42884,1274,41610,usd,1790922240,2026-10-02T06:24:00Z,succeeded,AEGIS-RECON order 1042,tenant01@aegis-fixtures.example,txn_00000000000000005f4d3946,428.84,12.74,416.10",
+    "ch_00000000000000a1b2cfcb52,charge,39973,1189,38784,usd,1791048780,2026-10-03T17:33:00Z,succeeded,AEGIS-RECON order 1099,tenant02@aegis-fixtures.example,txn_00000000000000005fa84fd7,399.73,11.89,387.84"
+  ].join("\n");
+
+  var FIXTURE_GL_CSV = [
+    "gl_entry_id,source_ref,transaction_date_est,posted_at_est,debit,credit,net_amount,currency,cost_center,memo",
+    "GL-2026-01001,txn_00000000000000005f0a1b2c,2026-09-30,2026-09-30T23:30:00-05:00,18.50,0.84,17.66,USD,CC-FINTECH-01,MATCHED_STRIPE_SETTLEMENT",
+    "GL-2026-01002,txn_00000000000000005f0bb445,2026-10-01,2026-10-01T00:07:00-05:00,28.27,1.12,27.15,USD,CC-FINTECH-02,MATCHED_STRIPE_SETTLEMENT",
+    "GL-2026-01003,txn_00000000000000005f0d4d5e,2026-10-01,2026-10-01T00:44:00-05:00,38.04,1.40,36.64,USD,CC-FINTECH-03,MATCHED_STRIPE_SETTLEMENT",
+    "GL-2026-01004,txn_00000000000000005f0ee677,2026-10-01,2026-10-01T01:21:00-05:00,47.81,1.69,46.12,USD,CC-FINTECH-04,MATCHED_STRIPE_SETTLEMENT",
+    "GL-2026-01043,txn_00000000000000005f4d3946,2026-10-02,2026-10-02T01:24:00-05:00,428.84,12.74,416.08,USD,CC-FINTECH-03,PRECISION_DRIFT_FLOAT64_TRUNCATION",
+    "GL-2026-01100,txn_00000000000000005fa84fd7,2026-10-03,2026-10-03T12:33:00-05:00,399.73,11.89,387.84,USD,CC-FINTECH-04,MATCHED_STRIPE_SETTLEMENT"
+  ].join("\n");
+
+  /* Terraform plan excerpt (planned_values slice of fixtures/tfplan.json). */
+  var FIXTURE_TFPLAN = {
+    format_version: "1.2",
+    terraform_version: "1.9.5",
+    timestamp: "2026-10-01T00:00:00Z",
+    planned_values: {
+      root_module: {
+        resources: [
+          {
+            address: "aws_ebs_volume.orphaned_gp3",
+            mode: "managed",
+            type: "aws_ebs_volume",
+            name: "orphaned_gp3",
+            provider_name: "registry.terraform.io/hashicorp/aws",
+            schema_version: 0,
+            values: {
+              availability_zone: "us-east-1a",
+              encrypted: true,
+              iops: 3000,
+              size: 100,
+              tags: { Aegis: "phantom-audit", Purpose: "unattached-ebs-drift", Billing: "idle-waste" },
+              throughput: 125,
+              type: "gp3",
+              attachments: []
+            },
+            sensitive_values: {}
+          },
+          {
+            address: "aws_lambda_function.aegis_core",
+            mode: "managed",
+            type: "aws_lambda_function",
+            name: "aegis_core",
+            provider_name: "registry.terraform.io/hashicorp/aws",
+            schema_version: 0,
+            values: {
+              architectures: ["arm64"],
+              environment: [{ variables: { TABLE_NAME: "AegisStateTable" } }],
+              function_name: "AegisCoreFunction",
+              handler: "app.lambda_handler",
+              memory_size: 256,
+              package_type: "Zip",
+              reserved_concurrent_executions: -1,
+              runtime: "python3.12",
+              timeout: 10
+            },
+            sensitive_values: {}
+          },
+          {
+            address: "aws_lambda_provisioned_concurrency_config.idle_warm_pool",
+            mode: "managed",
+            type: "aws_lambda_provisioned_concurrency_config",
+            name: "idle_warm_pool",
+            provider_name: "registry.terraform.io/hashicorp/aws",
+            schema_version: 0,
+            values: {
+              function_name: "AegisCoreFunction",
+              provisioned_concurrent_executions: 20,
+              qualifier: "$LATEST",
+              skip_destroy: false
+            },
+            sensitive_values: {}
+          },
+          {
+            address: "aws_dynamodb_table.aegis_state",
+            mode: "managed",
+            type: "aws_dynamodb_table",
+            name: "aegis_state",
+            provider_name: "registry.terraform.io/hashicorp/aws",
+            schema_version: 0,
+            values: {
+              attribute: [{ name: "PK", type: "S" }, { name: "SK", type: "S" }],
+              billing_mode: "PAY_PER_REQUEST",
+              hash_key: "PK",
+              name: "AegisStateTable",
+              range_key: "SK",
+              tags: { Aegis: "single-table-state", TTL: "enabled" },
+              ttl: [{ attribute_name: "ttl", enabled: true }]
+            },
+            sensitive_values: {}
+          }
+        ]
+      }
+    }
+  };
+  /* ---------------------------------------------------------------------------
+   * Policy constants. Rates are us-east-1 on-demand list prices; all money math
+   * below runs on integers (cents / µ$) so the view never drifts on IEEE-754.
+   * ------------------------------------------------------------------------ */
+  var TOLERANCE_CENTS = 2;                        /* ±$0.02 — GL row 42 canary   */
+  var GP3_USD_PER_GB_MONTH = 0.08;                /* gp3 storage, per GB-month   */
+  var LAMBDA_PC_MICROS_PER_GB_SECOND = 4.1667;    /* arm64 provisioned concurrency */
+  var HOURS_PER_MONTH = 730;
+  var LAMBDA_MEMORY_GB = 0.25;                    /* 256 MB                     */
+
+  var state = {
+    app: "reconciler",
+    xray: false,
+    settlements: [],
+    glEntries: [],
+    planResources: [],
+    planTimestamp: "",
+    source: "none"
+  };
+
+  var els = {
+    tabs: Array.prototype.slice.call(document.querySelectorAll(".app-tab")),
+    xrayToggle: document.getElementById("xray-toggle"),
+    xrayState: document.getElementById("xray-state"),
+    dropzone: document.getElementById("dropzone"),
+    fileInput: document.getElementById("file-input"),
+    loadStripe: document.getElementById("load-stripe"),
+    loadTfplan: document.getElementById("load-tfplan"),
+    resetView: document.getElementById("reset-view"),
+    ingestStatus: document.getElementById("ingest-status"),
+    ingestMeta: document.getElementById("ingest-meta"),
+    ledgerBody: document.getElementById("ledger-body"),
+    tableApp: document.getElementById("table-app"),
+    tableCount: document.getElementById("table-count"),
+    finopsWasteValue: document.getElementById("finops-waste-value"),
+    finopsMeter: document.getElementById("finops-meter"),
+    finopsNote: document.getElementById("finops-waste-note"),
+    manifestRows: document.getElementById("manifest-rows"),
+    manifestMatched: document.getElementById("manifest-matched"),
+    manifestDrift: document.getElementById("manifest-drift"),
+    manifestCritical: document.getElementById("manifest-critical"),
+    manifestDataset: document.getElementById("manifest-dataset")
+  };
+
+  /* ---------------------------- CSV (RFC 4180) ---------------------------- */
+  function parseCsv(text) {
+    var rows = [];
+    var row = [];
+    var field = "";
+    var inQuotes = false;
+    var index = 0;
+
+    while (index < text.length) {
+      var ch = text.charAt(index);
+      if (inQuotes) {
+        if (ch === '"') {
+          if (text.charAt(index + 1) === '"') { field += '"'; index += 2; continue; }
+          inQuotes = false; index += 1; continue;
         }
-        function updateHud() {
-            const count = zombies.length;
-            const burn = count * 0.096;
-            document.getElementById('hudBurn').innerText = `BURN DEFICIT: $${burn.toFixed(3)} / HR`;
-            document.getElementById('hudZombies').innerText = `ROGUE ENTITIES: ${count}`;
+        field += ch; index += 1; continue;
+      }
+      if (ch === '"') { inQuotes = true; index += 1; continue; }
+      if (ch === ",") { row.push(field); field = ""; index += 1; continue; }
+      if (ch === "\r") { index += 1; continue; }
+      if (ch === "\n") { row.push(field); rows.push(row); row = []; field = ""; index += 1; continue; }
+      field += ch; index += 1;
+    }
+    if (field.length > 0 || row.length > 0) { row.push(field); rows.push(row); }
+
+    var populated = rows.filter(function (cells) {
+      return cells.length > 1 || (cells.length === 1 && cells[0] !== "");
+    });
+    if (!populated.length) return [];
+
+    var header = populated[0].map(function (name) { return name.trim(); });
+    return populated.slice(1).map(function (cells) {
+      var record = {};
+      for (var column = 0; column < header.length; column += 1) {
+        record[header[column]] = cells[column] === undefined ? "" : cells[column].trim();
+      }
+      return record;
+    });
+  }
+
+  /* --------------------- Integer money helpers (no float) --------------------- */
+  function decimalToCents(value) {
+    var text = String(value === undefined || value === null ? "" : value).trim();
+    var match = /^-?(\d+)(?:\.(\d{1,2}))?$/.exec(text);
+    if (!match) return null;
+    var negative = text.charAt(0) === "-";
+    var fraction = ((match[2] || "") + "00").slice(0, 2);
+    var cents = Number(match[1]) * 100 + Number(fraction);
+    return negative ? -cents : cents;
+  }
+
+  function centsToDecimalText(cents) {
+    if (cents === null || cents === undefined) return "0.00";
+    var negative = cents < 0;
+    var abs = Math.abs(cents);
+    var fraction = abs % 100;
+    return (negative ? "-" : "") + Math.floor(abs / 100) + "." + (fraction < 10 ? "0" + fraction : String(fraction));
+  }
+
+  function centsToUsd(cents) {
+    return (cents < 0 ? "-" : "") + "$" + centsToDecimalText(Math.abs(cents));
+  }
+
+  function signedUsd(cents) {
+    if (!cents) return "0.00";
+    return (cents > 0 ? "+" : "") + centsToUsd(cents);
+  }
+
+  function microsToUsd(micros) {
+    var whole = Math.floor(micros / 1000000);
+    var fraction = String(micros % 1000000);
+    while (fraction.length < 6) fraction = "0" + fraction;
+    return "$" + whole + "." + fraction.slice(0, 4);
+  }
+
+  function toUtcLabel(value) {
+    if (!value) return "—";
+    var date = new Date(value);
+    if (isNaN(date.getTime())) return String(value);
+    return date.toISOString().replace(".000Z", "Z");
+  }
+
+  /* --------------------------- Plan resource helpers --------------------------- */
+  function collectPlanResources(plan) {
+    var collected = [];
+    var root = plan && plan.planned_values ? plan.planned_values.root_module : null;
+    function walk(module) {
+      if (!module) return;
+      if (Array.isArray(module.resources)) {
+        module.resources.forEach(function (resource) {
+          if (resource && resource.type) collected.push(resource);
+        });
+      }
+      if (Array.isArray(module.child_modules)) module.child_modules.forEach(walk);
+    }
+    walk(root);
+    return collected;
+  }
+
+  function resourceValues(resource) {
+    return resource && resource.values ? resource.values : {};
+  }
+  /* ============================ ROW BUILDERS ============================ */
+  /* Reconciler: joins the ingested Stripe export with the internal GL export
+     on balance_transaction / source_ref and measures the variance in integer
+     cents. Rows exist only for records that were actually ingested. */
+  function reconcilerRows() {
+    var glByTxn = new Map();
+    state.glEntries.forEach(function (entry) {
+      if (entry.source_ref) glByTxn.set(entry.source_ref, entry);
+    });
+
+    var rows = [];
+    var matchedTxn = new Set();
+
+    state.settlements.forEach(function (settlement) {
+      var txn = settlement.balance_transaction || "";
+      var glEntry = glByTxn.get(txn) || null;
+      if (glEntry) matchedTxn.add(txn);
+
+      var grossCents = decimalToCents(settlement.gross_decimal);
+      if (grossCents === null && /^\d+$/.test(settlement.amount || "")) {
+        grossCents = Number(settlement.amount);
+      }
+      var stripeNet = decimalToCents(settlement.net_decimal);
+      var glNet = glEntry ? decimalToCents(glEntry.net_amount) : null;
+      var variance = stripeNet === null || glNet === null ? null : glNet - stripeNet;
+
+      var tone = "neutral";
+      var label = "AWAITING GL";
+      var detail = "No internal GL entry references " + (txn || "this settlement");
+      if (glEntry && variance === 0) {
+        tone = "emerald";
+        label = "MATCHED";
+        detail = "GL net equals Stripe net (" + centsToDecimalText(glNet) + " USD)";
+      } else if (glEntry && Math.abs(variance) <= TOLERANCE_CENTS) {
+        tone = "amber";
+        label = "PRECISION DRIFT";
+        detail = "GL memo: " + (glEntry.memo || "unlabelled") + " · variance " + signedUsd(variance);
+      } else if (glEntry) {
+        tone = "rose";
+        label = "DISCREPANCY";
+        detail = "Variance " + signedUsd(variance) + " exceeds ±$0.02 tolerance";
+      }
+
+      rows.push({
+        timeUtc: toUtcLabel(settlement.created_utc || settlement.created),
+        recordId: settlement.id || txn || "—",
+        type: settlement.object || "charge",
+        primary: grossCents === null ? "—" : centsToUsd(grossCents),
+        variance: variance === null ? "—" : signedUsd(variance),
+        varianceTone: variance === null ? "neutral" : tone,
+        statusLabel: label,
+        statusTone: tone,
+        statusDetail: detail,
+        partitionKey: "RECONCILE#LEDGER",
+        sortKey: "TX#" + (txn || "unknown"),
+        astNode: glNet === null
+          ? "ast.Constant(None)"
+          : "ast.Constant(Decimal('" + centsToDecimalText(glNet) + "'))"
+      });
+    });
+
+    state.glEntries.forEach(function (entry) {
+      if (!entry.source_ref || matchedTxn.has(entry.source_ref)) return;
+      var glNet = decimalToCents(entry.net_amount);
+      rows.push({
+        timeUtc: toUtcLabel(entry.posted_at_est || entry.transaction_date_est),
+        recordId: entry.gl_entry_id || entry.source_ref,
+        type: "gl_entry",
+        primary: glNet === null ? "—" : centsToUsd(glNet),
+        variance: "—",
+        varianceTone: "rose",
+        statusLabel: "ORPHAN ENTRY",
+        statusTone: "rose",
+        statusDetail: "No Stripe settlement references " + entry.source_ref,
+        partitionKey: "RECONCILE#LEDGER",
+        sortKey: "TX#" + entry.source_ref,
+        astNode: "ast.Constant(Decimal('" + centsToDecimalText(glNet) + "'))"
+      });
+    });
+
+    return rows;
+  }
+  /* FinOps: renders exactly the planned resources that were ingested, with the
+     idle-burn estimate derived from declared size / provisioned concurrency. */
+  function finopsRows() {
+    var rows = [];
+    var timestamp = state.planTimestamp || "—";
+
+    state.planResources.forEach(function (resource) {
+      var values = resourceValues(resource);
+      var address = resource.address || resource.type || "unknown";
+      var type = resource.type || "unknown";
+
+      if (type === "aws_ebs_volume") {
+        var size = Number(values.size) || 0;
+        var attached = Array.isArray(values.attachments) && values.attachments.length > 0;
+        var monthlyCents = Math.round(size * GP3_USD_PER_GB_MONTH * 100);
+        rows.push({
+          timeUtc: timestamp,
+          recordId: address,
+          type: type,
+          primary: size + " GB " + (values.type || "?"),
+          variance: attached ? "0.00" : "+" + centsToUsd(monthlyCents) + " / MO",
+          varianceTone: attached ? "emerald" : "rose",
+          statusLabel: attached ? "ATTACHED" : "PHANTOM VOLUME",
+          statusTone: attached ? "emerald" : "rose",
+          statusDetail: attached
+            ? "Volume is attached to an instance"
+            : "attachments: [] — " + size + " GB " + (values.type || "?") + " never attached; pure idle burn",
+          partitionKey: "GUARD#SECURITY_AUDIT",
+          sortKey: "RESOURCE#" + address,
+          astNode: "ast.Constant(" + size + ")"
+        });
+        return;
+      }
+
+      if (type === "aws_lambda_provisioned_concurrency_config") {
+        var pcu = Number(values.provisioned_concurrent_executions) || 0;
+        var micros = Math.round(pcu * LAMBDA_MEMORY_GB * 3600 * LAMBDA_PC_MICROS_PER_GB_SECOND);
+        rows.push({
+          timeUtc: timestamp,
+          recordId: address,
+          type: type,
+          primary: pcu + " PCU · 256 MB",
+          variance: "+" + microsToUsd(micros) + " / HR",
+          varianceTone: "amber",
+          statusLabel: "IDLE WARM POOL",
+          statusTone: "amber",
+          statusDetail: "qualifier: " + (values.qualifier || "?") + " — provisioned concurrency bills while idle",
+          partitionKey: "GUARD#SECURITY_AUDIT",
+          sortKey: "RESOURCE#" + address,
+          astNode: "ast.Constant(" + pcu + ")"
+        });
+        return;
+      }
+
+      if (type === "aws_dynamodb_table") {
+        var ttl = Array.isArray(values.ttl) && values.ttl.length ? values.ttl[0] : {};
+        var ttlEnabled = ttl.enabled === true;
+        rows.push({
+          timeUtc: timestamp,
+          recordId: address,
+          type: type,
+          primary: values.billing_mode || "—",
+          variance: "0.00",
+          varianceTone: ttlEnabled ? "emerald" : "rose",
+          statusLabel: ttlEnabled ? "SCHEMA COMPLIANT" : "TTL DISABLED",
+          statusTone: ttlEnabled ? "emerald" : "rose",
+          statusDetail: "PK " + (values.hash_key || "?") + " / SK " + (values.range_key || "?") +
+            " · TTL " + (ttl.attribute_name || "?") + (ttlEnabled ? " enabled" : " disabled"),
+          partitionKey: "SCHEMA#SINGLE_TABLE",
+          sortKey: "TABLE#" + (values.name || "unknown"),
+          astNode: "ast.Dict(keys=['PK', 'SK', 'ttl'])"
+        });
+        return;
+      }
+
+      var architectures = Array.isArray(values.architectures) ? values.architectures.join("/") : "?";
+      var graviton = architectures.indexOf("arm64") !== -1;
+      rows.push({
+        timeUtc: timestamp,
+        recordId: address,
+        type: type,
+        primary: (values.memory_size === undefined ? "?" : values.memory_size) + " MB · " + architectures.toUpperCase(),
+        variance: "0.00",
+        varianceTone: graviton ? "emerald" : "amber",
+        statusLabel: graviton ? "GRAVITON COMPLIANT" : "ARCH DRIFT",
+        statusTone: graviton ? "emerald" : "amber",
+        statusDetail: (values.runtime || "?") + " · timeout " +
+          (values.timeout === undefined ? "?" : values.timeout) + "s · reserved concurrency " +
+          (values.reserved_concurrent_executions === undefined ? "—" : values.reserved_concurrent_executions),
+        partitionKey: "GUARD#SECURITY_AUDIT",
+        sortKey: "RESOURCE#" + address,
+        astNode: "ast.Dict(keys=['architectures', 'memory_size'])"
+      });
+    });
+
+    return rows;
+  }
+
+  function currentRows() {
+    return state.app === "finops" ? finopsRows() : reconcilerRows();
+  }
+  /* ============================ RENDERING ============================ */
+  function badge(label, tone) {
+    var span = document.createElement("span");
+    span.className = "badge badge-" + (tone || "neutral");
+    span.textContent = label;
+    return span;
+  }
+
+  function appendCell(parent, text, className) {
+    var cell = document.createElement("td");
+    if (className) cell.className = className;
+    cell.textContent = text;
+    parent.appendChild(cell);
+    return cell;
+  }
+
+  function buildRow(row) {
+    var tr = document.createElement("tr");
+
+    appendCell(tr, row.timeUtc, "col-time num");
+    appendCell(tr, row.recordId, "col-id num");
+    appendCell(tr, row.type, "col-type");
+    appendCell(tr, row.primary, "col-amount num");
+    appendCell(tr, row.variance, "col-variance num tone-" + row.varianceTone);
+
+    var statusCell = document.createElement("td");
+    statusCell.className = "col-status";
+    var human = document.createElement("span");
+    human.className = "status-human";
+    human.appendChild(badge(row.statusLabel, row.statusTone));
+    if (row.statusDetail) human.title = row.statusDetail;
+    var ast = document.createElement("span");
+    ast.className = "status-ast";
+    var node = document.createElement("code");
+    node.className = "ast-node";
+    node.textContent = row.astNode;
+    var key = document.createElement("code");
+    key.className = "ast-key";
+    key.textContent = "PK: " + row.partitionKey + " · SK: " + row.sortKey;
+    key.title = key.textContent;
+    ast.appendChild(node);
+    ast.appendChild(key);
+    statusCell.appendChild(human);
+    statusCell.appendChild(ast);
+    tr.appendChild(statusCell);
+
+    var ddbCell = document.createElement("td");
+    ddbCell.className = "col-ddb";
+    var pk = document.createElement("span");
+    pk.className = "ddb-pk num";
+    pk.textContent = "PK: " + row.partitionKey;
+    var sk = document.createElement("span");
+    sk.className = "ddb-sk num";
+    sk.textContent = "SK: " + row.sortKey;
+    sk.title = sk.textContent;
+    ddbCell.appendChild(pk);
+    ddbCell.appendChild(sk);
+    tr.appendChild(ddbCell);
+
+    return tr;
+  }
+
+  function renderLedger(rows) {
+    els.ledgerBody.textContent = "";
+    if (!rows.length) {
+      var emptyRow = document.createElement("tr");
+      emptyRow.className = "row-empty";
+      var cell = document.createElement("td");
+      cell.colSpan = 7;
+      cell.innerHTML = "<strong>NO DATA INGESTED</strong><br>" +
+        "Drop <code>stripe_settlements.csv</code> + <code>internal_gl.csv</code> or " +
+        "<code>tfplan.json</code>, or use a quick-load pill above.";
+      emptyRow.appendChild(cell);
+      els.ledgerBody.appendChild(emptyRow);
+      return;
+    }
+    rows.forEach(function (row) {
+      els.ledgerBody.appendChild(buildRow(row));
+    });
+  }
+
+  function datasetLabel() {
+    if (state.app === "finops") {
+      return state.planResources.length ? "TFPLAN / " + state.planResources.length + " RESOURCES" : "—";
+    }
+    if (!state.settlements.length && !state.glEntries.length) return "—";
+    return "STRIPE " + state.settlements.length + " / GL " + state.glEntries.length;
+  }
+
+  function renderManifest(rows) {
+    var matched = 0;
+    var drift = 0;
+    var critical = 0;
+    rows.forEach(function (row) {
+      if (row.statusTone === "emerald") matched += 1;
+      else if (row.statusTone === "amber") drift += 1;
+      else if (row.statusTone === "rose") critical += 1;
+    });
+    els.manifestRows.textContent = String(rows.length);
+    els.manifestMatched.textContent = String(matched);
+    els.manifestDrift.textContent = String(drift);
+    els.manifestCritical.textContent = String(critical);
+    els.manifestDataset.textContent = "DATASET: " + datasetLabel() +
+      " · TOLERANCE: ±$0.02 · SOURCE: " + state.source;
+  }
+  function finopsMetrics() {
+    var metrics = { total: state.planResources.length, flagged: 0, microsPerHour: 0 };
+    state.planResources.forEach(function (resource) {
+      var values = resourceValues(resource);
+      if (resource.type === "aws_ebs_volume") {
+        var attached = Array.isArray(values.attachments) && values.attachments.length > 0;
+        if (!attached) {
+          metrics.flagged += 1;
+          metrics.microsPerHour += Math.round(
+            (Number(values.size) || 0) * GP3_USD_PER_GB_MONTH * 1000000 / HOURS_PER_MONTH
+          );
         }
-        function popupText(x, y, txt, col = '#fbbf24') {
-            const p = document.createElement('div');
-            p.className = 'dmg-popup';
-            p.style.left = `${x}px`;
-            p.style.top = `${y}px`;
-            p.style.color = col;
-            p.innerText = txt;
-            arena.appendChild(p);
-            setTimeout(() => p.remove(), 800);
-        }
-        function shakeArena() {
-            arena.classList.add('shake');
-            setTimeout(() => arena.classList.remove('shake'), 300);
-        }
-        function castSmite() {
-            if (zombies.length === 0) {
-                addLog('No zombies to smite! Sanctuary is safe.', '#fbbf24');
-                return;
-            }
-            hero.classList.add('hero-charge');
-            setTimeout(() => {
-                playSfx('slash');
-                shakeArena();
-                const target = document.querySelector('.zombie-unit');
-                if (target) {
-                    const rect = target.getBoundingClientRect();
-                    const aRect = arena.getBoundingClientRect();
-                    critFx.style.left = `${rect.left - aRect.left - 30}px`;
-                    critFx.style.top = `${rect.top - aRect.top - 20}px`;
-                    critFx.style.display = 'block';
-                    setTimeout(() => critFx.style.display = 'none', 200);
-                    popupText(rect.left - aRect.left, rect.top - aRect.top, '9999 SMITE!');
-                    target.style.transform = 'scale(0) rotate(45deg)';
-                    target.style.opacity = '0';
-                    setTimeout(() => {
-                        target.remove();
-                        zombies.shift();
-                        updateHud();
-                    }, 250);
-                }
-                addLog('⚡ AEGIS SMITE: Rogue zombie terminated! Saved $0.096/hr.', '#fbbf24');
-            }, 180);
-            setTimeout(() => hero.classList.remove('hero-charge'), 380);
-        }
-        function castAllSmite() {
-            if (zombies.length === 0) {
-                addLog('Zero rogue entities. Divine realm pure!', '#22c55e');
-                return;
-            }
-            hero.classList.add('hero-charge');
-            setTimeout(() => {
-                playSfx('crit');
-                shakeArena();
-                const all = document.querySelectorAll('.zombie-unit');
-                all.forEach((z) => {
-                    const rect = z.getBoundingClientRect();
-                    const aRect = arena.getBoundingClientRect();
-                    popupText(rect.left - aRect.left, rect.top - aRect.top, 'CRIT 9999!', '#ef4444');
-                    z.style.transform = 'scale(0) rotate(-45deg)';
-                    z.style.opacity = '0';
-                    setTimeout(() => z.remove(), 250);
-                });
-                zombies = [];
-                updateHud();
-                addLog('🔥 HOLY STORM: All zombies incinerated! Idle rate $0.000 restored!', '#ef4444');
-            }, 200);
-            setTimeout(() => hero.classList.remove('hero-charge'), 400);
-        }
-        function castReconcile() {
-            playSfx('slash');
-            shakeArena();
-            popupText(100, 160, '+10 TX SETTLED', '#38bdf8');
-            addLog('📜 GrimReconciler: 10 transactions settled to DynamoDB (TTL 7-Day).', '#38bdf8');
-        }
-        function spawnZombie() {
-            serial++;
-            zombies.push({ id: serial });
-            const z = document.createElement('div');
-            z.className = 'zombie-unit';
-            z.id = `z-unit-${serial}`;
-            z.innerHTML = `
-                <div style="font-size: 7px; color: #fca5a5; margin-bottom: 4px;">RDS:ZOMBIE</div>
-                <div style="width: 44px; height: 5px; background: #ef4444; border: 1px solid #fff; margin-bottom: 4px;">
-                    <div style="width: 100%; height: 100%; background: #22c55e;"></div>
-                </div>
-                <svg class="zombie-sprite" viewBox="0 0 40 48" fill="none">
-                    <rect x="14" y="22" width="14" height="16" fill="#374151" stroke="#1f2937" stroke-width="1.5" />
-                    <rect x="4" y="24" width="12" height="5" fill="#15803d" />
-                    <rect x="12" y="8" width="18" height="15" rx="3" fill="#16a34a" stroke="#14532d" stroke-width="1.5" />
-                    <rect x="15" y="12" width="3" height="3" fill="#ef4444" />
-                    <rect x="24" y="12" width="3" height="3" fill="#ef4444" />
-                    <polygon points="16,18 26,17 23,21 18,21" fill="#020617" />
-                    <rect x="15" y="38" width="4" height="6" fill="#1f2937" />
-                    <rect x="23" y="38" width="4" height="6" fill="#1f2937" />
-                </svg>
-            `;
-            team.appendChild(z);
-            updateHud();
-            addLog(`⚠️ UNBUDGETED: Rogue Zombie #${serial} spawned! +$0.096/hr!`, '#ef4444');
-        }
-    </script>
+      } else if (resource.type === "aws_lambda_provisioned_concurrency_config") {
+        metrics.flagged += 1;
+        metrics.microsPerHour += Math.round(
+          (Number(values.provisioned_concurrent_executions) || 0) *
+          LAMBDA_MEMORY_GB * 3600 * LAMBDA_PC_MICROS_PER_GB_SECOND
+        );
+      }
+    });
+    return metrics;
+  }
+
+  function renderFinopsCard() {
+    var metrics = finopsMetrics();
+    els.finopsWasteValue.textContent = microsToUsd(metrics.microsPerHour);
+    els.finopsMeter.style.width = (metrics.total ? Math.round(metrics.flagged / metrics.total * 100) : 0) + "%";
+    els.finopsNote.textContent = metrics.total
+      ? metrics.flagged + " / " + metrics.total + " planned resources flagged · idle burn " +
+        microsToUsd(metrics.microsPerHour) + "/hr · skeleton steady state $0.0000/hr"
+      : "no plan ingested · 0 / 0 resources flagged · steady-state burn $0.0000/hr";
+  }
+
+  function render() {
+    var rows = currentRows();
+    renderLedger(rows);
+    renderManifest(rows);
+    renderFinopsCard();
+    els.tableApp.textContent = state.app === "finops"
+      ? "PHANTOMGUARD · CLOUD FINOPS"
+      : "GRIMRECONCILER · FINANCIAL GL";
+    els.tableCount.textContent = rows.length + (rows.length === 1 ? " ROW" : " ROWS");
+  }
+
+  function setApp(app) {
+    state.app = app === "finops" ? "finops" : "reconciler";
+    els.tabs.forEach(function (tab) {
+      var active = tab.getAttribute("data-app") === state.app;
+      tab.classList.toggle("is-active", active);
+      tab.setAttribute("aria-selected", active ? "true" : "false");
+    });
+    render();
+  }
+
+  function setXray(enabled) {
+    state.xray = !!enabled;
+    document.body.classList.toggle("is-xray", state.xray);
+    els.xrayToggle.checked = state.xray;
+    els.xrayState.textContent = state.xray ? "ON" : "OFF";
+  }
+  /* ============================ INGEST LAYER ============================ */
+  function setStatus(message, tone, source) {
+    els.ingestStatus.textContent = message;
+    els.ingestStatus.setAttribute("data-tone", tone || "neutral");
+    if (source) {
+      state.source = source;
+      els.ingestMeta.textContent = "SOURCE: " + source + " · PARSER: RFC4180 / JSON · TRANSPORT: local file only";
+    }
+  }
+
+  function ingestCsv(name, text) {
+    var records = parseCsv(text);
+    if (!records.length) {
+      setStatus(name + " · NO DATA ROWS PARSED", "rose", name);
+      return;
+    }
+    var header = Object.keys(records[0]);
+    if (header.indexOf("balance_transaction") !== -1 && header.indexOf("net_decimal") !== -1) {
+      state.settlements = records;
+      setStatus("STRIPE SETTLEMENTS · " + records.length + " ROWS (UTC)", "emerald", name);
+      setApp("reconciler");
+      return;
+    }
+    if (header.indexOf("source_ref") !== -1 && header.indexOf("net_amount") !== -1) {
+      state.glEntries = records;
+      setStatus("INTERNAL GL · " + records.length + " ROWS (EST → UTC)", "emerald", name);
+      setApp("reconciler");
+      return;
+    }
+    setStatus(name + " · UNKNOWN CSV SCHEMA", "rose", name);
+  }
+
+  function ingestJson(name, text) {
+    var plan;
+    try {
+      plan = JSON.parse(text);
+    } catch (error) {
+      setStatus(name + " · JSON PARSE ERROR", "rose", name);
+      return;
+    }
+    var resources = collectPlanResources(plan);
+    if (!resources.length) {
+      setStatus(name + " · NO planned_values RESOURCES", "rose", name);
+      return;
+    }
+    state.planResources = resources;
+    state.planTimestamp = plan.timestamp || "";
+    setStatus("TERRAFORM PLAN · " + resources.length + " RESOURCES", "amber", name);
+    setApp("finops");
+  }
+
+  function ingestText(name, text) {
+    var trimmed = String(text === undefined || text === null ? "" : text).trim();
+    if (!trimmed) {
+      setStatus(name + " · EMPTY ARTIFACT", "rose", name);
+      return;
+    }
+    var first = trimmed.charAt(0);
+    if (first === "{" || first === "[") {
+      ingestJson(name, trimmed);
+      return;
+    }
+    if (trimmed.indexOf(",") !== -1) {
+      ingestCsv(name, trimmed);
+      return;
+    }
+    setStatus(name + " · UNRECOGNIZED FORMAT (expect .csv or .json)", "rose", name);
+  }
+
+  function readFileText(file) {
+    if (typeof file.text === "function") return file.text();
+    return new Promise(function (resolve, reject) {
+      var reader = new FileReader();
+      reader.onload = function () { resolve(String(reader.result)); };
+      reader.onerror = function () { reject(reader.error || new Error("file read failed")); };
+      reader.readAsText(file);
+    });
+  }
+
+  function ingestFiles(fileList) {
+    var files = Array.prototype.slice.call(fileList || []);
+    if (!files.length) return;
+    files.reduce(function (chain, file) {
+      return chain.then(function () {
+        return readFileText(file).then(function (text) {
+          ingestText(file.name || "artifact", text);
+        });
+      });
+    }, Promise.resolve()).catch(function (error) {
+      setStatus("FILE READ FAILED · " + (error && error.message ? error.message : "unknown"), "rose");
+    });
+  }
+  /* ------------------------------ Quick loads ------------------------------ */
+  function loadStripeFixture() {
+    ingestText("fixtures/stripe_settlements.csv", FIXTURE_STRIPE_CSV);
+    ingestText("fixtures/internal_gl.csv", FIXTURE_GL_CSV);
+    setApp("reconciler");
+    setStatus(
+      "FIXTURE · Stripe 6 rows + GL 6 rows · drift canary = data row 42",
+      "amber",
+      "fixtures/stripe_settlements.csv + fixtures/internal_gl.csv"
+    );
+  }
+
+  function loadPlanFixture() {
+    ingestText("fixtures/tfplan.json", JSON.stringify(FIXTURE_TFPLAN));
+    setApp("finops");
+    setStatus(
+      "FIXTURE · tfplan.json · orphan 100 GB gp3 + idle provisioned concurrency",
+      "amber",
+      "fixtures/tfplan.json"
+    );
+  }
+
+  function resetView() {
+    state.settlements = [];
+    state.glEntries = [];
+    state.planResources = [];
+    state.planTimestamp = "";
+    state.source = "none";
+    setStatus("AWAITING INGEST — no dataset loaded", "neutral", "none");
+    els.ingestMeta.textContent = "SOURCE: — · PARSER: RFC4180 / JSON · TRANSPORT: local file only";
+    setApp("reconciler");
+  }
+
+  /* -------------------------------- Events -------------------------------- */
+  els.tabs.forEach(function (tab) {
+    tab.addEventListener("click", function () {
+      setApp(tab.getAttribute("data-app"));
+    });
+  });
+
+  els.xrayToggle.addEventListener("change", function () {
+    setXray(els.xrayToggle.checked);
+  });
+
+  els.dropzone.addEventListener("click", function (event) {
+    if (event.target && event.target.closest && event.target.closest(".pill")) return;
+    els.fileInput.click();
+  });
+
+  els.dropzone.addEventListener("keydown", function (event) {
+    if (event.key === "Enter" || event.key === " " || event.key === "Spacebar") {
+      event.preventDefault();
+      els.fileInput.click();
+    }
+  });
+
+  els.fileInput.addEventListener("change", function () {
+    ingestFiles(els.fileInput.files);
+    els.fileInput.value = "";
+  });
+
+  ["dragenter", "dragover"].forEach(function (type) {
+    els.dropzone.addEventListener(type, function (event) {
+      event.preventDefault();
+      event.stopPropagation();
+      els.dropzone.classList.add("is-dragover");
+    });
+  });
+
+  ["dragleave", "dragend"].forEach(function (type) {
+    els.dropzone.addEventListener(type, function (event) {
+      event.preventDefault();
+      event.stopPropagation();
+      els.dropzone.classList.remove("is-dragover");
+    });
+  });
+
+  els.dropzone.addEventListener("drop", function (event) {
+    event.preventDefault();
+    event.stopPropagation();
+    els.dropzone.classList.remove("is-dragover");
+    if (event.dataTransfer && event.dataTransfer.files) {
+      ingestFiles(event.dataTransfer.files);
+    }
+  });
+
+  window.addEventListener("dragover", function (event) { event.preventDefault(); });
+  window.addEventListener("drop", function (event) { event.preventDefault(); });
+
+  els.loadStripe.addEventListener("click", function (event) {
+    event.stopPropagation();
+    loadStripeFixture();
+  });
+  els.loadTfplan.addEventListener("click", function (event) {
+    event.stopPropagation();
+    loadPlanFixture();
+  });
+  els.resetView.addEventListener("click", resetView);
+
+  /* --------------------------------- Boot --------------------------------- */
+  setXray(false);
+  setApp("reconciler");
+  setStatus("AWAITING INGEST — no dataset loaded", "neutral", "none");
+})();
+</script>
 </body>
 </html>

@@ -1,19 +1,657 @@
-#!/bin/bash
-echo "🛡️  Aegis Smite: Scanning source code for Mirage Phantoms..."
-FORBIDDEN_PATTERNS=("localStorage" "sessionStorage" "IndexedDB")
+#!/usr/bin/env python3
+"""Aegis Smite - AegisSkeleton governance pre-commit hook (AST edition).
 
-# 只比對前端程式碼副檔名
-CODE_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(js|ts|jsx|tsx|html|vue)$' || true)
+Blocks, before a commit is accepted:
+  1. Unauthorized network egress in Python sources: ``requests``, ``urllib``,
+     ``httpx``, ``aiohttp``, ``http.client``, ``ftplib``, ``smtplib`` ... plus
+     raw sockets and dynamic imports of the same modules.
+  2. Counterfeit persistence: in-memory list/dict/set "databases", store-shaped
+     accumulators mutated like a table, and mock storage classes.
+  3. Client-side persistence APIs (localStorage / sessionStorage / IndexedDB)
+     inside web assets.
 
-if [ -n "$CODE_FILES" ]; then
-    for pattern in "${FORBIDDEN_PATTERNS[@]}"; do
-        if git diff --cached -S "$pattern" -- $CODE_FILES | grep -q "$pattern"; then
-            echo "❌ [聖騎士淨化攔截] 在程式碼中檢測到虛假持久化層: $pattern"
-            echo "⚠️  AegisSkeleton 已配置 DynamoDB，請使用標準 Serverless 連線池，禁止使用前端本地存儲偽造測試！"
-            exit 1
-        fi
-    done
-fi
+Standard library only - no third-party imports, no network access.
 
-echo "✅ 結界安全，代碼合規，允許提交。"
-exit 0
+Usage:
+    python3 .kiro/hooks/pre-commit                  # scan git staged files
+    python3 .kiro/hooks/pre-commit --all            # scan every tracked file
+    python3 .kiro/hooks/pre-commit path/to/a.py ... # scan explicit paths
+
+Exit codes: 0 = clean, 1 = violation(s) or unparseable Python found.
+"""
+
+import ast
+import os
+import re
+import subprocess
+import sys
+
+# --------------------------------------------------------------------------- #
+# Policy tables
+# --------------------------------------------------------------------------- #
+
+PYTHON_SUFFIXES = (".py",)
+WEB_SUFFIXES = (
+    ".js", ".mjs", ".cjs", ".ts", ".jsx", ".tsx",
+    ".html", ".htm", ".vue", ".svelte",
+)
+SKIP_DIRS = {".git", "node_modules", ".venv", "venv", "__pycache__", "dist", "build"}
+
+# Modules that open outbound network channels.
+DENIED_ROOTS = {
+    "requests",
+    "urllib",
+    "urllib2",
+    "urllib3",
+    "httpx",
+    "aiohttp",
+    "ftplib",
+    "telnetlib",
+    "smtplib",
+    "xmlrpc",
+}
+DENIED_PREFIXES = ("http.client",)
+
+# Raw socket egress is only flagged at call sites (import socket alone is legal).
+RAW_SOCKET_CALLS = {
+    "socket.socket",
+    "socket.socketpair",
+    "socket.create_connection",
+    "socket.create_server",
+}
+
+# Authorized egress path: the AWS SDK (IAM-signed, VPC-endpoint friendly).
+AUTHORIZED_ROOTS = {"boto3", "botocore"}
+
+DYNAMIC_IMPORTERS = {
+    "__import__",
+    "builtins.__import__",
+    "importlib.import_module",
+    "importlib.__import__",
+}
+
+CONTAINER_CALLS = {
+    "list",
+    "dict",
+    "set",
+    "collections.defaultdict",
+    "collections.OrderedDict",
+    "collections.deque",
+    "collections.Counter",
+    "defaultdict",
+    "OrderedDict",
+    "deque",
+    "Counter",
+}
+
+MUTATING_METHODS = {
+    "append",
+    "appendleft",
+    "extend",
+    "extendleft",
+    "insert",
+    "update",
+    "setdefault",
+    "pop",
+    "popitem",
+    "remove",
+    "clear",
+    "add",
+    "discard",
+    "popleft",
+    "sort",
+    "reverse",
+}
+
+# Identifier fragments that imply "this container pretends to be a database".
+STORE_TOKENS = {
+    "db",
+    "database",
+    "datastore",
+    "store",
+    "storage",
+    "ledger",
+    "registry",
+    "cache",
+    "memcache",
+    "memory",
+    "records",
+    "collection",
+    "repository",
+    "repo",
+    "table",
+    "session",
+    "buffer",
+    "queue",
+    "dataset",
+    "inventory",
+    "journal",
+    "transactions",
+    "accounts",
+}
+
+# Identifier fragments that imply "this store is counterfeit / fake".
+MOCK_TOKENS = {
+    "mock",
+    "fake",
+    "stub",
+    "dummy",
+    "memory",
+    "shadow",
+    "phantom",
+    "local",
+    "inmemory",
+}
+
+WEB_FORBIDDEN_PATTERN = re.compile(
+    r"\b(localStorage|sessionStorage|indexedDB|IndexedDB)\b"
+)
+WEB_COMMENT_PREFIXES = ("//", "/*", "*", "<!--", "--", "#")
+
+
+# --------------------------------------------------------------------------- #
+# Small helpers
+# --------------------------------------------------------------------------- #
+
+def _tokens(name):
+    """Split an identifier into lowercase tokens: 'InMemoryDB' -> in, memory, db."""
+    spaced = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", "_", name)
+    spaced = re.sub(r"(?<=[A-Z])(?=[A-Z][a-z])", "_", spaced)
+    spaced = re.sub(r"[^0-9a-zA-Z]+", "_", spaced)
+    return [token.lower() for token in spaced.split("_") if token]
+
+
+def _looks_like_store(name):
+    """True when an identifier advertises itself as a persistence layer."""
+    tokens = _tokens(name)
+    if not tokens:
+        return False
+    squeezed = "".join(tokens)
+    for needle in ("inmemorydb", "mockdb", "fakedb", "stubdb", "inmemorystore", "mockstore"):
+        if needle in squeezed:
+            return True
+    return any(token in STORE_TOKENS for token in tokens)
+
+
+def _looks_like_mock_store(name):
+    """True for store identifiers that are explicitly counterfeit."""
+    tokens = _tokens(name)
+    squeezed = "".join(tokens)
+    mockish = bool(set(tokens) & MOCK_TOKENS) or "inmemory" in squeezed
+    return _looks_like_store(name) and mockish
+
+
+def _dotted_name(node):
+    """Resolve a Name/Attribute chain into 'a.b.c' ('' when not resolvable)."""
+    if isinstance(node, ast.Name):
+        return node.id
+    if isinstance(node, ast.Attribute):
+        prefix = _dotted_name(node.value)
+        return "{0}.{1}".format(prefix, node.attr) if prefix else node.attr
+    return ""
+
+
+def _denied_module(dotted):
+    """True when a module path is an unauthorized egress channel."""
+    root = dotted.split(".")[0]
+    if root in AUTHORIZED_ROOTS:
+        return False
+    if root in DENIED_ROOTS:
+        return True
+    return any(dotted == prefix or dotted.startswith(prefix + ".") for prefix in DENIED_PREFIXES)
+
+
+def _is_container_node(node):
+    """True when a value expression creates a mutable in-memory container."""
+    if isinstance(node, (ast.List, ast.Dict, ast.Set, ast.ListComp, ast.DictComp, ast.SetComp)):
+        return True
+    if isinstance(node, ast.Call):
+        return _dotted_name(node.func) in CONTAINER_CALLS
+    return False
+
+
+# --------------------------------------------------------------------------- #
+# AST analyzer
+# --------------------------------------------------------------------------- #
+
+class AegisASTSmiteGuard(ast.NodeVisitor):
+    """Static auditor for egress channels and counterfeit persistence layers."""
+
+    RULE_EGRESS = "AEGIS-EGRESS"
+    RULE_STATE = "AEGIS-STATE"
+    RULE_SYNTAX = "AEGIS-SYNTAX"
+
+    def __init__(self, path, source):
+        self.path = path
+        self.source = source
+        self.lines = source.splitlines()
+        self.violations = []
+        self.aliases = {}
+        # Frame stack: module frame at index 0, then class / function frames.
+        self._frames = [{"name": "<module>", "stores": set()}]
+        self._instance_stores = set()
+        self._seen = set()
+
+    # -- reporting ---------------------------------------------------------- #
+
+    def _snippet(self, node):
+        line = getattr(node, "lineno", 0)
+        if 1 <= line <= len(self.lines):
+            text = self.lines[line - 1].strip()
+        else:
+            text = ""
+        return text[:160]
+
+    def _flag(self, node, rule, detail, hint):
+        line = getattr(node, "lineno", 0)
+        key = (line, rule, detail)
+        if key in self._seen:
+            return
+        self._seen.add(key)
+        self.violations.append(
+            {
+                "path": self.path,
+                "line": line,
+                "rule": rule,
+                "detail": detail,
+                "hint": hint,
+                "snippet": self._snippet(node),
+            }
+        )
+
+    def _flag_egress(self, node, detail):
+        self._flag(
+            node,
+            self.RULE_EGRESS,
+            detail,
+            "禁止直接外連 (requests/urllib/httpx/socket)。請改走 AWS SDK (boto3) "
+            "或 AegisIngestionQueue。",
+        )
+
+    def _flag_state(self, node, detail):
+        self._flag(
+            node,
+            self.RULE_STATE,
+            detail,
+            "禁止以記憶體陣列/字典冒充資料庫。唯一真理來源是 AegisStateTable "
+            "(DynamoDB, TTL 強制)。",
+        )
+
+    # -- scope bookkeeping -------------------------------------------------- #
+
+    def _push_frame(self, name):
+        self._frames.append({"name": name, "stores": set()})
+
+    def _pop_frame(self):
+        self._frames.pop()
+
+    def _is_tracked(self, ref):
+        if not ref:
+            return False
+        if ref in self._instance_stores:
+            return True
+        if "." in ref:
+            return False
+        return any(ref in frame["stores"] for frame in self._frames)
+
+    def _register_stores(self, targets, value):
+        if not _is_container_node(value):
+            return
+        for target in targets:
+            if isinstance(target, ast.Name) and _looks_like_store(target.id):
+                self._frames[-1]["stores"].add(target.id)
+            elif (
+                isinstance(target, ast.Attribute)
+                and isinstance(target.value, ast.Name)
+                and target.value.id == "self"
+                and _looks_like_store(target.attr)
+            ):
+                self._instance_stores.add("self.{0}".format(target.attr))
+            elif isinstance(target, (ast.Tuple, ast.List)):
+                self._register_stores(target.elts, value)
+
+    def _container_ref(self, node):
+        """Return the tracked identifier behind a mutation target, if any."""
+        if isinstance(node, ast.Name):
+            return node.id
+        if isinstance(node, ast.Attribute):
+            if isinstance(node.value, ast.Name) and node.value.id == "self":
+                return "self.{0}".format(node.attr)
+            return ""
+        if isinstance(node, ast.Subscript):
+            return self._container_ref(node.value)
+        return ""
+
+    def _canonical(self, dotted):
+        """Expand a leading import alias into its canonical module path."""
+        root, _, rest = dotted.partition(".")
+        base = self.aliases.get(root, root)
+        return "{0}.{1}".format(base, rest) if rest else base
+
+    # -- imports ------------------------------------------------------------ #
+
+    def visit_Import(self, node):
+        for alias in node.names:
+            local = alias.asname or alias.name.split(".")[0]
+            self.aliases[local] = alias.name
+            if _denied_module(alias.name):
+                self._flag_egress(
+                    node,
+                    "unauthorized network module import: '{0}'".format(alias.name),
+                )
+        self.generic_visit(node)
+
+    def visit_ImportFrom(self, node):
+        module = node.module or ""
+        if node.level:
+            # Relative import inside this package - never an egress channel.
+            module = ""
+        for alias in node.names:
+            if alias.name == "*":
+                continue
+            local = alias.asname or alias.name
+            self.aliases[local] = (
+                "{0}.{1}".format(module, alias.name) if module else alias.name
+            )
+        if module and _denied_module(module):
+            self._flag_egress(
+                node,
+                "unauthorized network module import: 'from {0} import ...'".format(module),
+            )
+        self.generic_visit(node)
+
+    # -- expression level --------------------------------------------------- #
+
+    def visit_Call(self, node):
+        dotted = _dotted_name(node.func)
+        if dotted:
+            canonical = self._canonical(dotted)
+            self._check_dynamic_import(node, canonical)
+            if _denied_module(canonical):
+                self._flag_egress(
+                    node,
+                    "unauthorized network egress call: {0}(...)".format(dotted),
+                )
+            elif canonical in RAW_SOCKET_CALLS:
+                self._flag_egress(
+                    node,
+                    "raw socket egress: {0}(...)".format(dotted),
+                )
+            self._check_mutation(node)
+        self.generic_visit(node)
+
+    def _check_dynamic_import(self, node, canonical):
+        if canonical not in DYNAMIC_IMPORTERS:
+            return
+        if not node.args:
+            return
+        argument = node.args[0]
+        if isinstance(argument, ast.Constant) and isinstance(argument.value, str):
+            if _denied_module(argument.value):
+                self._flag_egress(
+                    node,
+                    "dynamic import of denied network module: '{0}'".format(argument.value),
+                )
+
+    def _check_mutation(self, node):
+        func = node.func
+        if not isinstance(func, ast.Attribute) or func.attr not in MUTATING_METHODS:
+            return
+        ref = self._container_ref(func.value)
+        if self._is_tracked(ref):
+            self._flag_state(
+                node,
+                "in-memory store '{0}' mutated via .{1}() - counterfeit database".format(
+                    ref, func.attr
+                ),
+            )
+
+    # -- statement level ---------------------------------------------------- #
+
+    def visit_Assign(self, node):
+        self._register_stores(node.targets, node.value)
+        for target in node.targets:
+            if isinstance(target, ast.Subscript):
+                ref = self._container_ref(target.value)
+                if self._is_tracked(ref):
+                    self._flag_state(
+                        node,
+                        "in-memory store '{0}' written by subscript - counterfeit database".format(ref),
+                    )
+        self.generic_visit(node)
+
+    def visit_AnnAssign(self, node):
+        if node.value is not None:
+            self._register_stores([node.target], node.value)
+        self.generic_visit(node)
+
+    def visit_AugAssign(self, node):
+        ref = self._container_ref(node.target)
+        if self._is_tracked(ref):
+            self._flag_state(
+                node,
+                "in-memory store '{0}' mutated by augmented assignment".format(ref),
+            )
+        self.generic_visit(node)
+
+    def visit_Delete(self, node):
+        for target in node.targets:
+            if isinstance(target, ast.Subscript):
+                ref = self._container_ref(target.value)
+                if self._is_tracked(ref):
+                    self._flag_state(
+                        node,
+                        "in-memory store '{0}' mutated by 'del' - counterfeit database".format(ref),
+                    )
+        self.generic_visit(node)
+
+    # -- scopes ------------------------------------------------------------- #
+
+    def visit_ClassDef(self, node):
+        if _looks_like_mock_store(node.name):
+            self._flag_state(
+                node,
+                "counterfeit persistence class '{0}' declared".format(node.name),
+            )
+        self._push_frame("class {0}".format(node.name))
+        self.generic_visit(node)
+        self._pop_frame()
+
+    def visit_FunctionDef(self, node):
+        self._check_function_name(node)
+        self._push_frame(node.name)
+        self.generic_visit(node)
+        self._pop_frame()
+
+    def visit_AsyncFunctionDef(self, node):
+        self.visit_FunctionDef(node)
+
+    def _check_function_name(self, node):
+        if _looks_like_mock_store(node.name):
+            self._flag_state(
+                node,
+                "counterfeit persistence factory '{0}()' declared".format(node.name),
+            )
+
+
+# --------------------------------------------------------------------------- #
+# File discovery and scanning
+# --------------------------------------------------------------------------- #
+
+RULE_LABELS = {
+    "AEGIS-EGRESS": "未授權網路出口",
+    "AEGIS-STATE": "虛假持久化層",
+    "AEGIS-WEB-STORAGE": "前端虛假持久化",
+    "AEGIS-SYNTAX": "無法解析",
+}
+
+
+def _run_git(args):
+    """Run a read-only git command; return stripped stdout lines ([] on error)."""
+    try:
+        completed = subprocess.run(
+            ["git"] + args,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
+    except (OSError, ValueError):
+        return []
+    if completed.returncode != 0:
+        return []
+    stdout = completed.stdout.decode("utf-8", "replace")
+    return [line.strip() for line in stdout.splitlines() if line.strip()]
+
+
+def _expand_targets(paths):
+    """Expand files/directories into a deduplicated list of regular files."""
+    collected = []
+    for raw in paths:
+        path = os.path.normpath(raw)
+        if os.path.isdir(path):
+            for root, dirs, files in os.walk(path):
+                dirs[:] = sorted(d for d in dirs if d not in SKIP_DIRS)
+                for name in sorted(files):
+                    collected.append(os.path.join(root, name))
+        elif os.path.isfile(path):
+            collected.append(path)
+    return list(dict.fromkeys(collected))
+
+
+def _read_text(path):
+    with open(path, "r", encoding="utf-8", errors="replace") as handle:
+        return handle.read()
+
+
+def _scan_python(path, source):
+    """AST-audit one Python source; returns (violations, parsed_ok)."""
+    guard = AegisASTSmiteGuard(path, source)
+    try:
+        tree = ast.parse(source, filename=path)
+    except SyntaxError as error:
+        guard.violations.append(
+            {
+                "path": path,
+                "line": error.lineno or 0,
+                "rule": AegisASTSmiteGuard.RULE_SYNTAX,
+                "detail": "unparseable Python: {0}".format(error.msg),
+                "hint": "AST 掃描無法略過語法錯誤的檔案，請先修正語法。",
+                "snippet": (error.text or "").strip()[:160],
+            }
+        )
+        return guard.violations, False
+    guard.visit(tree)
+    return guard.violations, True
+
+
+def _scan_web(path, source):
+    """Plain-text scan of web assets for browser storage APIs."""
+    violations = []
+    for number, line in enumerate(source.splitlines(), start=1):
+        stripped = line.strip()
+        if not stripped or stripped.startswith(WEB_COMMENT_PREFIXES):
+            continue
+        for match in WEB_FORBIDDEN_PATTERN.finditer(line):
+            violations.append(
+                {
+                    "path": path,
+                    "line": number,
+                    "rule": "AEGIS-WEB-STORAGE",
+                    "detail": "client-side fake persistence: {0}".format(match.group(1)),
+                    "hint": "前端禁止 localStorage/sessionStorage/IndexedDB，"
+                    "請以 fetch() 呼叫真實 API。",
+                    "snippet": stripped[:160],
+                }
+            )
+    return violations
+
+
+def _report(violations):
+    print("")
+    print(
+        "❌ [聖騎士淨化攔截] 檢測到 {0} 項架構違規，提交已被阻擋。".format(len(violations))
+    )
+    print("")
+    for item in violations:
+        label = RULE_LABELS.get(item["rule"], item["rule"])
+        print(
+            "  ✗ {0}:{1}  [{2} | {3}]".format(
+                item["path"], item["line"], item["rule"], label
+            )
+        )
+        print("      偵測: {0}".format(item["detail"]))
+        if item["snippet"]:
+            print("      原始碼: {0}".format(item["snippet"]))
+        print("      ↳ {0}".format(item["hint"]))
+        print("")
+    print("  ── 修正後重新執行: python3 .kiro/hooks/pre-commit")
+    print("  ── 治理條款: .kiro/steering/architecture.md (Rule 1 / Rule 3)")
+
+
+def main(argv):
+    args = list(argv[1:])
+    if any(arg in ("-h", "--help") for arg in args):
+        print(__doc__.strip())
+        return 0
+
+    flags = {arg for arg in args if arg.startswith("-")}
+    explicit = [arg for arg in args if not arg.startswith("-")]
+
+    if explicit:
+        mode = "explicit paths"
+        raw_targets = explicit
+    elif "--all" in flags:
+        mode = "all tracked files"
+        raw_targets = _run_git(["ls-files"])
+    else:
+        raw_targets = _run_git(["diff", "--cached", "--name-only", "--diff-filter=ACM"])
+        if raw_targets:
+            mode = "staged files"
+        else:
+            mode = "tracked files (nothing staged)"
+            raw_targets = _run_git(["ls-files"])
+
+    targets = _expand_targets(raw_targets)
+    python_files = [path for path in targets if path.lower().endswith(PYTHON_SUFFIXES)]
+    web_files = [path for path in targets if path.lower().endswith(WEB_SUFFIXES)]
+
+    print(
+        "🛡️  Aegis Smite: AST governance scan ({0}) - {1} python / {2} web asset(s)".format(
+            mode, len(python_files), len(web_files)
+        )
+    )
+
+    violations = []
+    for path in python_files:
+        try:
+            source = _read_text(path)
+        except OSError as error:
+            print("  ⚠️  skipped unreadable file: {0} ({1})".format(path, error))
+            continue
+        file_violations, parsed = _scan_python(path, source)
+        violations.extend(file_violations)
+        if parsed and not file_violations:
+            print("  ✔ AST clean: {0}".format(path))
+
+    for path in web_files:
+        try:
+            source = _read_text(path)
+        except OSError as error:
+            print("  ⚠️  skipped unreadable file: {0} ({1})".format(path, error))
+            continue
+        file_violations = _scan_web(path, source)
+        violations.extend(file_violations)
+        if not file_violations:
+            print("  ✔ storage clean: {0}".format(path))
+
+    if violations:
+        _report(violations)
+        return 1
+
+    print("")
+    print("✅ 結界安全，代碼合規，允許提交。 (0 violations)")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))
