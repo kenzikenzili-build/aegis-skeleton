@@ -44,8 +44,8 @@ Resources:
   AegisIngestionFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: src/functions/
-      Handler: app.ingest_handler
+      CodeUri: .
+      Handler: src.functions.app.ingest_handler
       Runtime: python3.12
       Architectures:
         - arm64
@@ -69,8 +69,8 @@ Resources:
   AegisCoreFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: src/functions/
-      Handler: app.lambda_handler
+      CodeUri: .
+      Handler: src.functions.app.lambda_handler
       Environment:
         Variables:
           TABLE_NAME: !Ref AegisStateTable
