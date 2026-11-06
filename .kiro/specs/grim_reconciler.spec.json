@@ -1,0 +1,295 @@
+{
+  "specId": "grim_reconciler",
+  "specVersion": "1.0.0",
+  "application": "GrimReconciler",
+  "domain": "FinTech / Zero-Idle Reconciliation",
+  "base_skeleton": "AegisSkeleton",
+  "extends": ".kiro/specs/core-architecture.spec.json",
+  "legacyIntentSpec": ".kiro/specs/grim-reconciler.spec.json",
+  "jsonSchemaDialect": "http://json-schema.org/draft-07/schema#",
+  "description": "Formal contract for apps/grim-reconciler: the transaction event schema, the reconciliation state machine, and the single-table DynamoDB mapping. Every clause carries an implementation status ('implemented', 'partial' or 'planned') so the contract is honest about what the code does at this commit. Binding rules live in .kiro/steering/architecture.md; where this file and template.yaml disagree, template.yaml wins.",
+  "rules": [
+    "Inherit SQS ingestion queue for transaction ledger intake.",
+    "Persist reconciliation state strictly into DynamoDB with 7-day TTL.",
+    "Zero persistent servers."
+  ],
+  "ingress": {
+    "endpoint": "POST /ingest (AegisHttpApi)",
+    "buffer": "AegisIngestionQueue",
+    "routingKey": "type == \"reconciliation\"",
+    "handler": "src/functions/app.py::lambda_handler -> apps/grim-reconciler/reconciler.py::reconcile_transaction",
+    "implemented": true
+  },
+  "eventSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "$id": "urn:aegis:grim-reconciler:transaction-event:1",
+    "title": "GrimReconciler transaction event",
+    "description": "Envelope accepted by POST /ingest and delivered through SQS. Unknown top-level and payload fields are carried but ignored by the reconciler.",
+    "type": "object",
+    "required": ["id", "type", "payload"],
+    "additionalProperties": true,
+    "properties": {
+      "id": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 255,
+        "description": "Idempotency identifier of the message. Used as the transaction key when payload.transaction_id is absent."
+      },
+      "type": {
+        "const": "reconciliation"
+      },
+      "payload": {
+        "$ref": "#/definitions/payload"
+      }
+    },
+    "definitions": {
+      "money": {
+        "description": "Monetary value in whole currency units. Producers must send a decimal string (or an integer). A JSON number with a fractional part is rejected because it was almost certainly produced by binary floating point (Rule 4). Integer digits are capped at 20 so the cent-quantised value fits the 28-digit Decimal context.",
+        "oneOf": [
+          {
+            "type": "string",
+            "pattern": "^-?\\d{1,20}(\\.\\d+)?$"
+          },
+          {
+            "type": "integer",
+            "minimum": -100000000000000000000,
+            "maximum": 100000000000000000000
+          }
+        ]
+      },
+      "payload": {
+        "type": "object",
+        "required": ["transaction_id", "amount", "status"],
+        "additionalProperties": true,
+        "properties": {
+          "transaction_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255,
+            "description": "Stripe balance_transaction id (fixtures: source_ref). Becomes SK = TX#<transaction_id>. 255 characters at up to 4 bytes each plus the 3-byte prefix stays under the 1024-byte DynamoDB sort-key limit."
+          },
+          "amount": {
+            "$ref": "#/definitions/money",
+            "description": "Net settlement amount reported by the producer, in whole currency units. The core persists it as a two-decimal string, ROUND_HALF_UP."
+          },
+          "status": {
+            "type": "string",
+            "enum": ["PENDING", "SUCCESS", "FAILED"],
+            "description": "Producer-side settlement status. SUCCESS drives SETTLED; any other value is non-success. FAILED is named here for clarity; the handler treats every value other than SUCCESS the same way."
+          },
+          "ledger_amount": {
+            "$ref": "#/definitions/money",
+            "description": "PLANNED (x-implemented: false). Internal GL amount for the same transaction when the producer holds both sides. Enables the MATCHED transition. Ignored by the handler at this commit.",
+            "x-implemented": false
+          }
+        }
+      }
+    }
+  },
+  "stateMachine": {
+    "description": "Lifecycle of one reconciliation record, keyed by transaction. The persisted attribute is 'status'. The first event for a transaction creates the row directly in the state it derives; PENDING is the initial state when the producer reports a non-final status.",
+    "attribute": "status",
+    "initialState": "PENDING",
+    "states": {
+      "PENDING": {
+        "terminal": false,
+        "implemented": false,
+        "description": "Awaiting settlement and a ledger match. NOT persisted as such today: reconcile_transaction maps a PENDING input to FLAGGED_DISCREPANCY."
+      },
+      "MATCHED": {
+        "terminal": false,
+        "implemented": false,
+        "description": "Both sides agree on the amount (exact Decimal variance of 0.00) but settlement is not yet confirmed. No code path produces this state at this commit."
+      },
+      "SETTLED": {
+        "terminal": true,
+        "implemented": true,
+        "description": "Settlement confirmed (status SUCCESS). Reached today from any prior state."
+      },
+      "FLAGGED_DISCREPANCY": {
+        "terminal": false,
+        "implemented": true,
+        "description": "Needs review: a non-success status, or (planned) a non-zero Decimal variance. Recoverable: a later corrected event may move the record to MATCHED or SETTLED."
+      }
+    },
+    "transitions": [
+      {
+        "id": "T1",
+        "from": "PENDING",
+        "to": "MATCHED",
+        "trigger": "reconciliation event with status PENDING and ledger_amount present",
+        "guard": "Decimal(amount) - Decimal(ledger_amount) == Decimal('0.00')",
+        "implemented": false
+      },
+      {
+        "id": "T2",
+        "from": "PENDING",
+        "to": "SETTLED",
+        "trigger": "reconciliation event with status SUCCESS",
+        "guard": "ledger_amount absent, or Decimal(amount) - Decimal(ledger_amount) == Decimal('0.00')",
+        "implemented": "partial",
+        "notes": "The handler settles on status == SUCCESS alone; it never compares amounts."
+      },
+      {
+        "id": "T3",
+        "from": "MATCHED",
+        "to": "SETTLED",
+        "trigger": "reconciliation event with status SUCCESS",
+        "guard": "variance == Decimal('0.00')",
+        "implemented": false
+      },
+      {
+        "id": "T4",
+        "from": ["PENDING", "MATCHED"],
+        "to": "FLAGGED_DISCREPANCY",
+        "trigger": "reconciliation event with status FAILED, or ledger_amount present with a non-zero Decimal variance",
+        "guard": "status != 'SUCCESS' or variance != Decimal('0.00')",
+        "implemented": "partial",
+        "notes": "Today any status other than SUCCESS (including PENDING) flags a discrepancy. The variance guard is not evaluated."
+      },
+      {
+        "id": "T5",
+        "from": "FLAGGED_DISCREPANCY",
+        "to": ["MATCHED", "SETTLED"],
+        "trigger": "corrected reconciliation event for the same transaction_id",
+        "guard": "same guards as T1 / T2",
+        "implemented": "partial",
+        "notes": "FLAGGED_DISCREPANCY -> SETTLED works today because PutItem overwrites. FLAGGED_DISCREPANCY -> MATCHED does not exist yet."
+      }
+    ],
+    "invariants": [
+      {
+        "id": "SM-1",
+        "statement": "SETTLED is terminal: no event may move a SETTLED record to another state.",
+        "enforcement": "planned: PutItem with ConditionExpression (attribute_not_exists(PK) OR #status <> :settled)",
+        "implemented": false,
+        "observedViolation": "Replaying a FAILED event after SUCCESS overwrites SETTLED with FLAGGED_DISCREPANCY, because PutItem is unconditional."
+      },
+      {
+        "id": "SM-2",
+        "statement": "Redelivering the same event produces the same record (idempotent). Only timestamp attributes and ttl may differ.",
+        "enforcement": "deterministic key (PK, SK) + PutItem overwrite",
+        "implemented": true,
+        "verifiedBy": "tests/test_property_invariants.py::test_batches_of_up_to_ten_records_are_processed_idempotently"
+      },
+      {
+        "id": "SM-3",
+        "statement": "Variance is computed and compared as decimal.Decimal only. The canary is fixtures/internal_gl.csv row index 42, whose variance must be exactly Decimal('-0.02').",
+        "enforcement": "Rule 4; AST Smite Guard rule AEGIS-FLOAT; fixture canary",
+        "implemented": "partial",
+        "notes": "Amounts are quantised with Decimal on write. The variance comparison itself is not implemented in the handler."
+      }
+    ]
+  },
+  "persistence": {
+    "table": "AegisStateTable",
+    "billingMode": "PAY_PER_REQUEST",
+    "partitionKey": {
+      "attribute": "PK",
+      "type": "S",
+      "value": "RECONCILE#LEDGER"
+    },
+    "sortKey": {
+      "attribute": "SK",
+      "type": "S",
+      "pattern": "TX#<transaction_id>"
+    },
+    "ttl": {
+      "attribute": "ttl",
+      "seconds": 604800,
+      "human": "7 days",
+      "formula": "ttl = int(time.time()) + 604800, written on every PutItem",
+      "invariant": "No item may be written without ttl."
+    },
+    "writeSemantics": "PutItem, last write wins. No ConditionExpression at this commit (see SM-1).",
+    "writers": [
+      {
+        "module": "src/functions/app.py::_write_reconciliation",
+        "role": "canonical writer; normalises amount to a two-decimal string and sets created_at, transaction_id and ttl"
+      },
+      {
+        "module": "apps/grim-reconciler/reconciler.py::reconcile_transaction",
+        "role": "domain writer; writes the same key first, so a domain event costs two writes. Without payload.transaction_id it writes SK = TX#None, a stray row the core never overwrites."
+      }
+    ],
+    "accessPatterns": [
+      {
+        "name": "get one transaction",
+        "operation": "GetItem",
+        "key": {"PK": "RECONCILE#LEDGER", "SK": "TX#<transaction_id>"}
+      },
+      {
+        "name": "list the ledger",
+        "operation": "Query",
+        "keyCondition": "PK = :pk",
+        "filter": "ttl > :now",
+        "notes": "Always filter on ttl: expired items stay visible until DynamoDB's asynchronous TTL sweep removes them."
+      },
+      {
+        "name": "list discrepancies",
+        "operation": "Query",
+        "keyCondition": "PK = :pk AND begins_with(SK, :prefix)",
+        "filter": "#status = :flagged AND ttl > :now",
+        "notes": "No GSI by design (Rule 2). The filter runs after the read, so it does not reduce consumed read units."
+      }
+    ],
+    "capacityNote": "Rule 2 puts every reconciliation row under one partition key value, which concentrates write traffic on a single key. Load-test the sustained write rate before relying on high throughput, and remember each domain event currently costs two writes.",
+    "itemSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "$id": "urn:aegis:grim-reconciler:ledger-item:1",
+      "title": "GrimReconciler ledger item (as stored in AegisStateTable)",
+      "type": "object",
+      "required": ["PK", "SK", "transaction_id", "amount", "status", "reconciled_at", "created_at", "ttl"],
+      "additionalProperties": false,
+      "properties": {
+        "PK": {
+          "const": "RECONCILE#LEDGER"
+        },
+        "SK": {
+          "type": "string",
+          "pattern": "^TX#.+$"
+        },
+        "transaction_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "amount": {
+          "type": "string",
+          "pattern": "^-?\\d+\\.\\d{2}$",
+          "description": "str(Decimal), two places, ROUND_HALF_UP. Never a DynamoDB number, never a float."
+        },
+        "status": {
+          "enum": ["PENDING", "MATCHED", "SETTLED", "FLAGGED_DISCREPANCY"],
+          "description": "Only SETTLED and FLAGGED_DISCREPANCY are written at this commit."
+        },
+        "reconciled_at": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Epoch seconds when the domain handler evaluated the event."
+        },
+        "created_at": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Epoch seconds when the core wrote the item. ttl = created_at + 604800."
+        },
+        "ttl": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Epoch seconds, written on every item (Rule 2)."
+        },
+        "variance": {
+          "type": "string",
+          "pattern": "^-?\\d+\\.\\d{2}$",
+          "description": "PLANNED (x-implemented: false). Decimal(amount) - Decimal(ledger_amount) as a two-decimal string.",
+          "x-implemented": false
+        }
+      }
+    }
+  },
+  "knownDeviations": [
+    "PENDING and MATCHED are specified but never persisted; a PENDING input is stored as FLAGGED_DISCREPANCY.",
+    "SETTLED is not protected: PutItem has no ConditionExpression, so a later non-success event overwrites it.",
+    "Variance is not computed by the handler; row-42 drift detection currently happens only in frontend/index.html, in integer cents.",
+    "A payload without transaction_id leaves a stray TX#None row written by the domain handler."
+  ]
+}

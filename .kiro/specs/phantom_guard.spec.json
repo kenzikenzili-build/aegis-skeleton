@@ -1,0 +1,302 @@
+{
+  "specId": "phantom_guard",
+  "specVersion": "1.0.0",
+  "application": "PhantomGuard",
+  "domain": "DevOps / FinOps Cloud Sentry",
+  "base_skeleton": "AegisSkeleton",
+  "extends": ".kiro/specs/core-architecture.spec.json",
+  "legacyIntentSpec": ".kiro/specs/phantom-guard.spec.json",
+  "jsonSchemaDialect": "http://json-schema.org/draft-07/schema#",
+  "description": "Formal contract for apps/phantom-guard: the cloud audit event schema, the resource discovery rules (orphaned EBS volumes, zombie EC2/RDS instances), the audit decision model, and the TTL eviction rules. Every clause carries an implementation status ('implemented', 'partial' or 'planned') so the contract is honest about what the code does at this commit. Binding rules live in .kiro/steering/architecture.md; where this file and template.yaml disagree, template.yaml wins.",
+  "rules": [
+    "Buffer AWS CloudTrail & EventBridge alerts through AegisIngestionQueue.",
+    "Trigger automatic circuit breaking on unbudgeted EC2/RDS resource spikes.",
+    "Store audit trails in DynamoDB Pay-Per-Request."
+  ],
+  "ingress": {
+    "endpoint": "POST /ingest (AegisHttpApi)",
+    "buffer": "AegisIngestionQueue",
+    "routingKey": "type == \"cloud_audit\"",
+    "handler": "src/functions/app.py::lambda_handler -> apps/phantom-guard/sentry.py::inspect_cloud_event",
+    "implemented": true
+  },
+  "eventSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "$id": "urn:aegis:phantom-guard:cloud-audit-event:1",
+    "title": "PhantomGuard cloud audit event",
+    "description": "Envelope accepted by POST /ingest and delivered through SQS. A CloudTrail or EventBridge event is normalised by the producer into this shape; the sentry does not parse raw CloudTrail records. Unknown fields are carried but ignored.",
+    "type": "object",
+    "required": ["id", "type", "payload"],
+    "additionalProperties": true,
+    "properties": {
+      "id": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 255,
+        "description": "Idempotency identifier of the message. Used as the resource key when payload.resource_id is absent."
+      },
+      "type": {
+        "const": "cloud_audit"
+      },
+      "payload": {
+        "$ref": "#/definitions/payload"
+      }
+    },
+    "definitions": {
+      "payload": {
+        "type": "object",
+        "required": ["resource_id", "resource_type", "cost_per_hour"],
+        "additionalProperties": true,
+        "properties": {
+          "resource_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255,
+            "description": "Provider identifier, e.g. i-0abc123, vol-0def456, a DB instance identifier. Becomes SK = RESOURCE#<resource_id>. 255 characters at up to 4 bytes each plus the 9-byte prefix stays under the 1024-byte DynamoDB sort-key limit."
+          },
+          "resource_type": {
+            "type": "string",
+            "minLength": 1,
+            "description": "CloudFormation-style resource type. The circuit breaker keys on the exact strings AWS::EC2::Instance and AWS::RDS::DBInstance.",
+            "examples": ["AWS::EC2::Instance", "AWS::RDS::DBInstance", "AWS::EC2::Volume", "AWS::Lambda::Function"]
+          },
+          "cost_per_hour": {
+            "description": "Estimated hourly cost in USD. Producers must send a decimal string (or an integer). A JSON number with a fractional part is rejected because it was almost certainly produced by binary floating point (Rule 4). The core stores it as a two-decimal string, so sub-cent hourly rates are rounded to cents.",
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d{1,20}(\\.\\d+)?$"
+              },
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 100000000000000000000
+              }
+            ]
+          },
+          "state": {
+            "type": "string",
+            "enum": ["available", "in-use", "creating", "deleting", "deleted", "error"],
+            "description": "EBS volume state as reported by EC2 (DescribeVolumes). 'available' means the volume is not attached. Read by discovery rule DR-1 once implemented in the sentry.",
+            "x-implemented": false
+          },
+          "attachments": {
+            "type": "array",
+            "items": {"type": "object"},
+            "description": "EBS volume attachments (DescribeVolumes) or Terraform 'attachments'. An empty array means unattached. Read by discovery rule DR-1 once implemented in the sentry.",
+            "x-implemented": false
+          },
+          "observed_at": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Epoch seconds at which the producer observed the resource. Reserved for rule DR-2 'sustained' checks.",
+            "x-implemented": false
+          }
+        }
+      }
+    }
+  },
+  "resourceDiscoveryRules": [
+    {
+      "id": "DR-1",
+      "name": "orphaned-ebs-volume",
+      "target": "AWS::EC2::Volume (Terraform: aws_ebs_volume)",
+      "condition": "state == 'available' OR attachments is an empty array",
+      "rationale": "An unattached EBS volume bills for its provisioned size every hour and serves nothing. Example: fixtures/tfplan.json declares a 100 GB gp3 volume with attachments [].",
+      "decision": {
+        "circuit_breaker_triggered": false,
+        "action_taken": "FLAG_ORPHAN",
+        "remediation": "Snapshot if needed, then delete the volume."
+      },
+      "implemented": "partial",
+      "implementedIn": "frontend/index.html (finopsRows): reads a Terraform plan and labels the row PHANTOM VOLUME",
+      "gap": "apps/phantom-guard/sentry.py has no EBS rule: an AWS::EC2::Volume event is stored with action_taken = ALLOW. Action value FLAG_ORPHAN is planned and not yet written to DynamoDB."
+    },
+    {
+      "id": "DR-2",
+      "name": "zombie-ec2-rds",
+      "target": "AWS::EC2::Instance, AWS::RDS::DBInstance",
+      "condition": "resource_type in {'AWS::EC2::Instance', 'AWS::RDS::DBInstance'}",
+      "rationale": "AegisSkeleton is zero-idle: no always-on EC2 or RDS may exist (steering Rule 3). Any such resource reaching the sentry is unbudgeted by definition and trips the circuit breaker.",
+      "decision": {
+        "circuit_breaker_triggered": true,
+        "action_taken": "TERMINATE_SIGNAL_SENT"
+      },
+      "implemented": true,
+      "implementedIn": "apps/phantom-guard/sentry.py::inspect_cloud_event",
+      "caveat": "The decision is recorded only. The sentry calls no EC2 or RDS API, so nothing is terminated: 'TERMINATE_SIGNAL_SENT' is a label on the audit row. The match is on resource_type alone, with no budget, age or utilisation check, so a legitimate instance and a zombie are indistinguishable."
+    }
+  ],
+  "decisionModel": {
+    "description": "One audit event yields one decision stored on the resource row. Rules are evaluated in order and the first match wins; an event that matches no rule is allowed.",
+    "outcomes": {
+      "TERMINATE_SIGNAL_SENT": {
+        "circuit_breaker_triggered": true,
+        "producedBy": ["DR-2"],
+        "implemented": true
+      },
+      "FLAG_ORPHAN": {
+        "circuit_breaker_triggered": false,
+        "producedBy": ["DR-1"],
+        "implemented": false
+      },
+      "ALLOW": {
+        "circuit_breaker_triggered": false,
+        "producedBy": [],
+        "implemented": true
+      }
+    }
+  },
+  "persistence": {
+    "table": "AegisStateTable",
+    "billingMode": "PAY_PER_REQUEST",
+    "partitionKey": {
+      "attribute": "PK",
+      "type": "S",
+      "value": "GUARD#SECURITY_AUDIT"
+    },
+    "sortKey": {
+      "attribute": "SK",
+      "type": "S",
+      "pattern": "RESOURCE#<resource_id>"
+    },
+    "writeSemantics": "PutItem, last write wins: one row per resource holding its most recent audit decision. There is no per-event history.",
+    "writers": [
+      {
+        "module": "src/functions/app.py::_write_security_audit",
+        "role": "canonical writer; normalises estimated_hourly_burn to a two-decimal string and sets resource_id and ttl"
+      },
+      {
+        "module": "apps/phantom-guard/sentry.py::inspect_cloud_event",
+        "role": "domain writer; writes the same key first, so a domain event costs two writes. Without payload.resource_id it writes SK = RESOURCE#None, a stray row the core never overwrites."
+      }
+    ],
+    "accessPatterns": [
+      {
+        "name": "get one resource",
+        "operation": "GetItem",
+        "key": {"PK": "GUARD#SECURITY_AUDIT", "SK": "RESOURCE#<resource_id>"}
+      },
+      {
+        "name": "list active audits",
+        "operation": "Query",
+        "keyCondition": "PK = :pk",
+        "filter": "ttl > :now"
+      },
+      {
+        "name": "list tripped breakers",
+        "operation": "Query",
+        "keyCondition": "PK = :pk",
+        "filter": "circuit_breaker_triggered = :true AND ttl > :now",
+        "notes": "No GSI by design (Rule 2). The filter runs after the read, so it does not reduce consumed read units."
+      }
+    ],
+    "itemSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "$id": "urn:aegis:phantom-guard:audit-item:1",
+      "title": "PhantomGuard audit item (as stored in AegisStateTable)",
+      "type": "object",
+      "required": [
+        "PK",
+        "SK",
+        "resource_id",
+        "resource_type",
+        "estimated_hourly_burn",
+        "circuit_breaker_triggered",
+        "action_taken",
+        "audited_at",
+        "ttl"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "PK": {
+          "const": "GUARD#SECURITY_AUDIT"
+        },
+        "SK": {
+          "type": "string",
+          "pattern": "^RESOURCE#.+$"
+        },
+        "resource_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "resource_type": {
+          "type": "string",
+          "minLength": 1
+        },
+        "estimated_hourly_burn": {
+          "type": "string",
+          "pattern": "^-?\\d+\\.\\d{2}$",
+          "description": "str(Decimal), two places, ROUND_HALF_UP. Sub-cent hourly rates are rounded: 0.0416 is stored as 0.04."
+        },
+        "circuit_breaker_triggered": {
+          "type": "boolean"
+        },
+        "action_taken": {
+          "enum": ["TERMINATE_SIGNAL_SENT", "FLAG_ORPHAN", "ALLOW"],
+          "description": "FLAG_ORPHAN is planned (DR-1) and not written at this commit."
+        },
+        "audited_at": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Epoch seconds when the sentry evaluated the event. ttl = audited_at + 86400, give or take the second boundary between the two clock reads."
+        },
+        "ttl": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Epoch seconds, written on every item (Rule 2)."
+        }
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"action_taken": {"const": "TERMINATE_SIGNAL_SENT"}}, "required": ["action_taken"]},
+          "then": {"properties": {"circuit_breaker_triggered": {"const": true}}}
+        },
+        {
+          "if": {"properties": {"action_taken": {"enum": ["ALLOW", "FLAG_ORPHAN"]}}, "required": ["action_taken"]},
+          "then": {"properties": {"circuit_breaker_triggered": {"const": false}}}
+        }
+      ]
+    }
+  },
+  "ttlEviction": {
+    "attribute": "ttl",
+    "seconds": 86400,
+    "human": "24 hours",
+    "formula": "ttl = int(time.time()) + 86400, written on every PutItem",
+    "rules": [
+      {
+        "id": "TTL-1",
+        "statement": "Every audit row carries ttl. A row without ttl is unbounded storage and is a hard failure.",
+        "implemented": true,
+        "verifiedBy": "tests/test_property_invariants.py::test_batches_of_up_to_ten_records_are_processed_idempotently"
+      },
+      {
+        "id": "TTL-2",
+        "statement": "The TTL budget is 86400 seconds. Changing it requires amending .kiro/steering/architecture.md in the same commit.",
+        "implemented": true
+      },
+      {
+        "id": "TTL-3",
+        "statement": "A new audit event for the same resource overwrites the row and restarts the 24 hour window. A resource that keeps reporting never expires; a resource that stops reporting disappears 24 hours after its last event.",
+        "implemented": true
+      },
+      {
+        "id": "TTL-4",
+        "statement": "DynamoDB deletes expired items asynchronously, typically some hours after expiry. Readers must filter on ttl > now and must not assume an expired row is already gone.",
+        "implemented": "reader obligation"
+      },
+      {
+        "id": "TTL-5",
+        "statement": "The audit trail is a rolling 24 hour view of current resource state, not a permanent record. Anything that must outlive 24 hours has to be exported elsewhere before expiry.",
+        "implemented": "by design"
+      }
+    ]
+  },
+  "knownDeviations": [
+    "Orphaned-EBS detection (DR-1) exists only in the console. The Lambda sentry stores an AWS::EC2::Volume event as ALLOW.",
+    "TERMINATE_SIGNAL_SENT is a label: the sentry makes no EC2 or RDS API call, so no resource is terminated.",
+    "Sub-cent hourly burn is rounded to cents on write (0.0416 becomes 0.04).",
+    "A payload without resource_id leaves a stray RESOURCE#None row written by the domain handler."
+  ]
+}
