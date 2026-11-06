@@ -263,6 +263,13 @@
     font-size: 11.5px; letter-spacing: 0.02em; line-height: 1.6;
     color: var(--muted); word-break: break-word;
   }
+  .ingest-meta code {
+    font-family: var(--font-mono); font-size: 11.5px; color: var(--slate-300);
+  }
+  .api-status { letter-spacing: 0.06em; text-transform: uppercase; }
+  .api-status[data-tone="emerald"] { color: var(--emerald); }
+  .api-status[data-tone="amber"] { color: var(--amber); }
+  .api-status[data-tone="rose"] { color: var(--rose); }
 
   /* ---------------- Zone B : ledger pipeline ---------------- */
   .zone-b { display: flex; flex-direction: column; min-height: 452px; overflow: hidden; }
@@ -563,6 +570,7 @@
       <span class="ingest-kicker font-title">INGEST TELEMETRY</span>
       <p class="ingest-status" id="ingest-status" data-tone="neutral" role="status" aria-live="polite">AWAITING INGEST &mdash; no dataset loaded</p>
       <p class="ingest-meta" id="ingest-meta">SOURCE: &mdash; · PARSER: RFC4180 / JSON · TRANSPORT: local file only</p>
+      <p class="ingest-meta" id="ingest-api">API: <code id="api-base">https://u3geom1dc0.execute-api.us-east-1.amazonaws.com</code> · POST /ingest · STATUS: <span class="api-status" id="api-status" data-tone="neutral">probing</span></p>
     </div>
   </section>
 
@@ -823,6 +831,17 @@
   var HOURS_PER_MONTH = 730;
   var LAMBDA_MEMORY_GB = 0.25;                    /* 256 MB                     */
 
+  /* ---------------------------------------------------------------------------
+   * Live deployment binding. CloudFormation stack `aegis-skeleton-prod`
+   * (us-east-1) publishes exactly one public door for the core: an HTTP API v2
+   * endpoint whose only route is POST /ingest (API Gateway -> SQS ->
+   * AegisCoreFunction -> DynamoDB). The base URL below is the deployed value of
+   * the `HttpApiUrl` stack output; every transport reference derives from it so
+   * the endpoint is never duplicated as a literal elsewhere in the view.
+   * ------------------------------------------------------------------------ */
+  var AEGIS_API_BASE = "https://u3geom1dc0.execute-api.us-east-1.amazonaws.com";
+  var AEGIS_API_INGEST = AEGIS_API_BASE + "/ingest";
+
   var state = {
     app: "reconciler",
     xray: false,
@@ -844,6 +863,8 @@
     resetView: document.getElementById("reset-view"),
     ingestStatus: document.getElementById("ingest-status"),
     ingestMeta: document.getElementById("ingest-meta"),
+    apiBase: document.getElementById("api-base"),
+    apiStatus: document.getElementById("api-status"),
     ledgerBody: document.getElementById("ledger-body"),
     tableApp: document.getElementById("table-app"),
     tableCount: document.getElementById("table-count"),
@@ -1307,6 +1328,37 @@
     els.xrayToggle.checked = state.xray;
     els.xrayState.textContent = state.xray ? "ON" : "OFF";
   }
+  /* ============================ LIVE API BINDING ============================ */
+  function setApiStatus(label, tone) {
+    if (!els.apiStatus) { return; }
+    els.apiStatus.textContent = label;
+    els.apiStatus.setAttribute("data-tone", tone || "neutral");
+  }
+
+  /* The bound HTTP API answers the CORS preflight for OPTIONS /ingest with 204,
+   * so reachability can be proven without writing a single message into the
+   * ingestion queue. Failures degrade to a labelled state — never an exception. */
+  function probeLiveApi() {
+    if (els.apiBase) {
+      els.apiBase.textContent = AEGIS_API_BASE;
+    }
+    if (!els.apiStatus) { return; }
+    if (typeof fetch !== "function") {
+      setApiStatus("no fetch", "amber");
+      return;
+    }
+    fetch(AEGIS_API_INGEST, { method: "OPTIONS", mode: "cors", cache: "no-store" })
+      .then(function (response) {
+        if (response.ok) {
+          setApiStatus("live " + response.status, "emerald");
+        } else {
+          setApiStatus("http " + response.status, "amber");
+        }
+      }, function () {
+        setApiStatus("unreachable", "rose");
+      });
+  }
+
   /* ============================ INGEST LAYER ============================ */
   function setStatus(message, tone, source) {
     els.ingestStatus.textContent = message;
@@ -1502,6 +1554,7 @@
   setXray(false);
   setApp("reconciler");
   setStatus("AWAITING INGEST — no dataset loaded", "neutral", "none");
+  probeLiveApi();
 })();
 </script>
 </body>
