@@ -9,6 +9,10 @@ Blocks, before a commit is accepted:
      accumulators mutated like a table, and mock storage classes.
   3. Client-side persistence APIs (localStorage / sessionStorage / IndexedDB)
      inside web assets.
+  4. IEEE-754 float arithmetic on monetary fields (Rule 4): ``+ - * /`` (and
+     the augmented forms) on a name containing ``amount``, ``balance``,
+     ``cost``, ``fee`` or ``price`` when an operand is a float literal or a
+     ``float()`` call. Money arithmetic must use ``decimal.Decimal``.
 
 Standard library only - no third-party imports, no network access.
 
@@ -143,6 +147,29 @@ MOCK_TOKENS = {
     "inmemory",
 }
 
+# Rule 4 (decimal.Decimal for money): identifier tokens that mark a monetary
+# field. Matching is per token, so ``net_amount`` and ``totalFee`` match but
+# ``feedback`` does not. Plurals (``fees``, ``prices``) match as well.
+MONEY_TOKENS = {"amount", "balance", "cost", "fee", "price"}
+
+# Operators inspected by the float-currency rule, with their display symbols.
+FLOAT_MATH_OPS = {ast.Add: "+", ast.Sub: "-", ast.Mult: "*", ast.Div: "/"}
+
+# Calls whose result is an IEEE-754 float.
+FLOAT_CALLS = {"float", "builtins.float"}
+
+# Calls that carry a monetary operand through unchanged: float(amount),
+# abs(fee), round(price), Decimal(cost) ...
+MONEY_PASSTHROUGH_CALLS = {
+    "float",
+    "builtins.float",
+    "int",
+    "abs",
+    "round",
+    "Decimal",
+    "decimal.Decimal",
+}
+
 WEB_FORBIDDEN_PATTERN = re.compile(
     r"\b(localStorage|sessionStorage|indexedDB|IndexedDB)\b"
 )
@@ -171,6 +198,23 @@ def _looks_like_store(name):
         if needle in squeezed:
             return True
     return any(token in STORE_TOKENS for token in tokens)
+
+
+def _is_money_name(name):
+    """True when an identifier names a monetary field (amount, fee, price ...)."""
+    for token in _tokens(name):
+        if token in MONEY_TOKENS:
+            return True
+        if token.endswith("s") and token[:-1] in MONEY_TOKENS:
+            return True
+    return False
+
+
+def _string_constant(node):
+    """Return the str value of a string literal node, else None."""
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return node.value
+    return None
 
 
 def _looks_like_mock_store(name):
@@ -220,6 +264,7 @@ class AegisASTSmiteGuard(ast.NodeVisitor):
     RULE_EGRESS = "AEGIS-EGRESS"
     RULE_STATE = "AEGIS-STATE"
     RULE_SYNTAX = "AEGIS-SYNTAX"
+    RULE_FLOAT = "AEGIS-FLOAT"
 
     def __init__(self, path, source):
         self.path = path
@@ -275,6 +320,16 @@ class AegisASTSmiteGuard(ast.NodeVisitor):
             detail,
             "禁止以記憶體陣列/字典冒充資料庫。唯一真理來源是 AegisStateTable "
             "(DynamoDB, TTL 強制)。",
+        )
+
+    def _flag_float(self, node, detail):
+        self._flag(
+            node,
+            self.RULE_FLOAT,
+            detail,
+            "金額運算必須使用 decimal.Decimal（例如 Decimal('0.029')，並以 "
+            "quantize(..., rounding=ROUND_HALF_UP) 取整），禁止 float 字面值與 "
+            "float()。見 Rule 4。",
         )
 
     # -- scope bookkeeping -------------------------------------------------- #
@@ -473,6 +528,116 @@ class AegisASTSmiteGuard(ast.NodeVisitor):
                 "counterfeit persistence factory '{0}()' declared".format(node.name),
             )
 
+    # -- Rule 4: float currency math ---------------------------------------- #
+
+    def _money_reference(self, node):
+        """Return the monetary identifier an operand expression reads, or None.
+
+        Recognises ``amount``, ``tx.amount``, ``row["amount"]``,
+        ``body.get("amount")`` and wrappers such as ``float(amount)``, and looks
+        through nested arithmetic and unary signs. Anything else (for example
+        ``len(prices)``) is not treated as a monetary operand.
+        """
+        if isinstance(node, ast.Name):
+            return node.id if _is_money_name(node.id) else None
+        if isinstance(node, ast.Attribute):
+            return node.attr if _is_money_name(node.attr) else None
+        if isinstance(node, ast.Subscript):
+            key = _string_constant(node.slice)
+            if key is not None and _is_money_name(key):
+                return key
+            return self._money_reference(node.value)
+        if isinstance(node, ast.UnaryOp):
+            return self._money_reference(node.operand)
+        if isinstance(node, ast.BinOp):
+            return self._money_reference(node.left) or self._money_reference(node.right)
+        if isinstance(node, ast.Call):
+            func = node.func
+            if isinstance(func, ast.Attribute) and func.attr == "get" and node.args:
+                key = _string_constant(node.args[0])
+                if key is not None and _is_money_name(key):
+                    return key
+            dotted = _dotted_name(func)
+            if dotted and node.args:
+                if self._canonical(dotted) in MONEY_PASSTHROUGH_CALLS:
+                    return self._money_reference(node.args[0])
+        return None
+
+    def _float_source(self, node):
+        """Describe the float an operand carries ('float literal 0.1'), or None.
+
+        A float literal, a ``float()`` call, or arithmetic containing either
+        (``1 + 0.029``) is float-valued; the float propagates through the
+        expression.
+        """
+        if isinstance(node, ast.Constant) and isinstance(node.value, float):
+            return "float literal {0!r}".format(node.value)
+        if isinstance(node, ast.UnaryOp):
+            return self._float_source(node.operand)
+        if isinstance(node, ast.BinOp):
+            return self._float_source(node.left) or self._float_source(node.right)
+        if isinstance(node, ast.Call):
+            dotted = _dotted_name(node.func)
+            if dotted and self._canonical(dotted) in FLOAT_CALLS:
+                return "float() call"
+        return None
+
+    def _check_float_currency_math(self, tree):
+        """Flag ``+ - * /`` that mixes a monetary field with a float (Rule 4).
+
+        A ``BinOp`` is a violation when one of its operands reads a monetary
+        field and one of its operands is a float literal or a ``float()`` call,
+        directly or inside nested arithmetic. Two statement forms are covered as
+        well, because the monetary name is often the assignment target rather
+        than an operand:
+
+          * augmented assignment: ``fee *= 0.029``
+          * assignment of float arithmetic to a monetary name:
+            ``fee = gross * 0.029 + 0.30``
+
+        Only the outermost offending expression is reported, so
+        ``amount * 0.029 + 0.30`` yields one violation, not two.
+
+        This is a syntactic check: it does not infer types, so a float held in
+        a plain variable (``rate = 0.029``) is not seen, and a bare literal
+        assignment (``price = 19.99``) is not arithmetic and is not flagged.
+        """
+        covered = set()
+        for node in ast.walk(tree):
+            if id(node) in covered:
+                continue
+            if isinstance(node, ast.BinOp):
+                operands = (node.left, node.right)
+                operator = node.op
+            elif isinstance(node, ast.AugAssign):
+                operands = (node.target, node.value)
+                operator = node.op
+            elif isinstance(node, (ast.Assign, ast.AnnAssign)):
+                if not isinstance(node.value, ast.BinOp):
+                    continue
+                targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+                operands = tuple(targets) + (node.value,)
+                operator = node.value.op
+            else:
+                continue
+            symbol = FLOAT_MATH_OPS.get(type(operator))
+            if symbol is None:
+                continue
+
+            money = next(filter(None, map(self._money_reference, operands)), None)
+            floaty = next(filter(None, map(self._float_source, operands)), None)
+            if not (money and floaty):
+                continue
+
+            if isinstance(node, ast.AugAssign):
+                symbol += "="
+            self._flag_float(
+                node,
+                "float arithmetic on monetary field '{0}' ('{1}' expression contains "
+                "{2}) - IEEE-754 drift".format(money, symbol, floaty),
+            )
+            covered.update(id(child) for child in ast.walk(node))
+
 
 # --------------------------------------------------------------------------- #
 # File discovery and scanning
@@ -482,6 +647,7 @@ RULE_LABELS = {
     "AEGIS-EGRESS": "未授權網路出口",
     "AEGIS-STATE": "虛假持久化層",
     "AEGIS-WEB-STORAGE": "前端虛假持久化",
+    "AEGIS-FLOAT": "浮點金額運算",
     "AEGIS-SYNTAX": "無法解析",
 }
 
@@ -541,6 +707,8 @@ def _scan_python(path, source):
         )
         return guard.violations, False
     guard.visit(tree)
+    guard._check_float_currency_math(tree)
+    guard.violations.sort(key=lambda item: item["line"])
     return guard.violations, True
 
 
@@ -585,7 +753,7 @@ def _report(violations):
         print("      ↳ {0}".format(item["hint"]))
         print("")
     print("  ── 修正後重新執行: python3 .kiro/hooks/pre-commit")
-    print("  ── 治理條款: .kiro/steering/architecture.md (Rule 1 / Rule 3)")
+    print("  ── 治理條款: .kiro/steering/architecture.md (Rule 1 / Rule 3 / Rule 4)")
 
 
 def main(argv):

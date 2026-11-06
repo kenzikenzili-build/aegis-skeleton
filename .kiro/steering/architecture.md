@@ -191,6 +191,18 @@ Row index `42` (0-based, excluding the header) is the canary. A reconciler that
 reports any variance other than exactly `Decimal("-0.02")` for that row — or
 that reports noise on the other 99 rows — is non-compliant with Rule 4.
 
+**Enforcement.** `AegisASTSmiteGuard` in `.kiro/hooks/pre-commit` (rule
+`AEGIS-FLOAT`, method `_check_float_currency_math`) rejects `+ - * /` when a name
+containing the token `amount`, `balance`, `cost`, `fee` or `price` meets a float
+literal or a `float()` call. It covers plain expressions, augmented assignment
+(`fee *= 0.029`), and float arithmetic assigned into a monetary name
+(`fee = gross * 0.029 + 0.30`). Exit code `1` blocks the commit. Tests:
+`tests/test_ast_float_guard.py`.
+
+The check is syntactic, so these remain review items: a float held in a plain
+variable (`rate = 0.029`), `round(amount, 2)` on its own, epsilon comparisons, and
+`Decimal(0.1)` built from a float.
+
 ---
 
 ## Delivery gate
