@@ -24,7 +24,48 @@ Resources:
         deadLetterTargetArn: !GetAtt AegisDeadLetterQueue.Arn
         maxReceiveCount: 3
 
-  # 2. 核心處理函數 (純按需執行，零閒置開銷)
+  # 2. 對外唯一入口：HTTP API (API Gateway v2，無閒置成本)
+  AegisHttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      Description: AegisSkeleton ingest gateway - POST /ingest buffers into AegisIngestionQueue
+      StageName: $default
+      CorsConfiguration:
+        AllowOrigins:
+          - "*"
+        AllowHeaders:
+          - Content-Type
+        AllowMethods:
+          - POST
+          - OPTIONS
+        MaxAge: 600
+
+  # 3. 入口函數：只驗證並把訊息投入佇列 (Rule 1：所有外部寫入必經緩衝)
+  AegisIngestionFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/functions/
+      Handler: app.ingest_handler
+      Runtime: python3.12
+      Architectures:
+        - arm64
+      MemorySize: 256
+      Timeout: 10
+      Environment:
+        Variables:
+          INGESTION_QUEUE_URL: !Ref AegisIngestionQueue
+      Policies:
+        - SQSSendMessagePolicy:
+            QueueName: !GetAtt AegisIngestionQueue.QueueName
+      Events:
+        ApiEvent:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref AegisHttpApi
+            Path: /ingest
+            Method: POST
+
+  # 4. 核心處理函數 (純按需執行，零閒置開銷)
   AegisCoreFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -43,7 +84,7 @@ Resources:
             Queue: !GetAtt AegisIngestionQueue.Arn
             BatchSize: 10
 
-  # 3. 唯一真理狀態庫 (按需計費，帶 TTL 自動清理)
+  # 5. 唯一真理狀態庫 (按需計費，帶 TTL 自動清理)
   AegisStateTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -63,6 +104,9 @@ Resources:
         Enabled: true
 
 Outputs:
+  HttpApiUrl:
+    Description: Base URL of the AegisSkeleton HTTP API (POST /ingest)
+    Value: !Sub "https://${AegisHttpApi}.execute-api.${AWS::Region}.amazonaws.com"
   QueueUrl:
     Description: Ingestion SQS Queue URL
     Value: !Ref AegisIngestionQueue
