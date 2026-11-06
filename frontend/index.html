@@ -1335,9 +1335,18 @@
     els.apiStatus.setAttribute("data-tone", tone || "neutral");
   }
 
-  /* The bound HTTP API answers the CORS preflight for OPTIONS /ingest with 204,
-   * so reachability can be proven without writing a single message into the
-   * ingestion queue. Failures degrade to a labelled state — never an exception. */
+  /* A hand-rolled `fetch(url, { method: "OPTIONS" })` can never be read by the
+   * browser: API Gateway only attaches CORS headers when the OPTIONS request
+   * carries an `Access-Control-Request-Method` header, and fetch never sets it
+   * for an explicit OPTIONS. The request therefore comes back without
+   * `Access-Control-Allow-Origin` and is blocked by the CORS policy.
+   *
+   * So the probe is a JSON POST instead. The browser emits its own native
+   * preflight (OPTIONS /ingest -> 204 from the CorsConfiguration), and the real
+   * request is stopped by envelope validation (400 INVALID_PAYLOAD) before any
+   * `sqs.send_message` runs — reachability is proven without contaminating
+   * AegisIngestionQueue. 200/202/400 all mean the gateway is live; transport
+   * failures degrade to a labelled state, never an exception. */
   function probeLiveApi() {
     if (els.apiBase) {
       els.apiBase.textContent = AEGIS_API_BASE;
@@ -1347,10 +1356,17 @@
       setApiStatus("no fetch", "amber");
       return;
     }
-    fetch(AEGIS_API_INGEST, { method: "OPTIONS", mode: "cors", cache: "no-store" })
+    fetch(AEGIS_API_INGEST, {
+      method: "POST",
+      mode: "cors",
+      cache: "no-store",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ probe: true })
+    })
       .then(function (response) {
-        if (response.ok) {
-          setApiStatus("live " + response.status, "emerald");
+        /* Both 200, 202, or 400 (validation fail) confirm API Gateway is reachable */
+        if (response.status === 200 || response.status === 202 || response.status === 400) {
+          setApiStatus("online", "emerald");
         } else {
           setApiStatus("http " + response.status, "amber");
         }

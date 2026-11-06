@@ -30,14 +30,21 @@ Resources:
     Properties:
       Description: AegisSkeleton ingest gateway - POST /ingest buffers into AegisIngestionQueue
       StageName: $default
+      # CORS 必須覆蓋 GET / POST / OPTIONS / HEAD：瀏覽器對 application/json 的
+      # POST 會先自動送出 preflight (OPTIONS)，AllowMethods 缺少對應 method 時
+      # 請求會在抵達整合前就被封鎖。萬用字元一律寫成未加引號的 "*"；寫成 "'*'"
+      # (REST API 的舊寫法) 會讓 API Gateway 直接回傳字面值 'Access-Control-
+      # Allow-Origin: *'，瀏覽器反而比對不到 origin 而封鎖整個請求。
       CorsConfiguration:
         AllowOrigins:
           - "*"
         AllowHeaders:
-          - Content-Type
+          - "*"
         AllowMethods:
+          - GET
           - POST
           - OPTIONS
+          - HEAD
         MaxAge: 600
 
   # 3. 入口函數：只驗證並把訊息投入佇列 (Rule 1：所有外部寫入必經緩衝)
