@@ -1,0 +1,19 @@
+{
+  "mcpServers": {
+    "aegis-governance": {
+      "command": "python3",
+      "args": [
+        "mcp/aegis_mcp_server.py"
+      ],
+      "env": {
+        "PYTHONUNBUFFERED": "1",
+        "AWS_REGION": "us-east-1",
+        "AEGIS_API_URL": "https://u3geom1dc0.execute-api.us-east-1.amazonaws.com"
+      },
+      "disabled": false,
+      "autoApprove": [
+        "audit_ast_float_safety"
+      ]
+    }
+  }
+}

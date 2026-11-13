@@ -266,7 +266,14 @@
   .ingest-meta code {
     font-family: var(--font-mono); font-size: 11.5px; color: var(--slate-300);
   }
+  .ingest-meta[data-tone="emerald"] { color: var(--emerald); }
+  .ingest-meta[data-tone="amber"] { color: var(--amber); }
+  .ingest-meta[data-tone="rose"] { color: var(--rose); }
   .api-status { letter-spacing: 0.06em; text-transform: uppercase; }
+  .pill:disabled {
+    opacity: 0.55; cursor: progress; transform: none;
+    border-color: var(--line); color: var(--slate-400);
+  }
   .api-status[data-tone="emerald"] { color: var(--emerald); }
   .api-status[data-tone="amber"] { color: var(--amber); }
   .api-status[data-tone="rose"] { color: var(--rose); }
@@ -570,6 +577,7 @@
       <span class="ingest-kicker font-title">INGEST TELEMETRY</span>
       <p class="ingest-status" id="ingest-status" data-tone="neutral" role="status" aria-live="polite">AWAITING INGEST &mdash; no dataset loaded</p>
       <p class="ingest-meta" id="ingest-meta">SOURCE: &mdash; · PARSER: RFC4180 / JSON · TRANSPORT: local file only</p>
+      <p class="ingest-meta" id="ingest-ack" data-tone="neutral" role="status" aria-live="polite">TYPE: &mdash; · DATASET: &mdash; · ROWS: 0 · TRANSPORT: POST /ingest &rarr; SQS</p>
       <p class="ingest-meta" id="ingest-api">API: <code id="api-base">https://u3geom1dc0.execute-api.us-east-1.amazonaws.com</code> · POST /ingest · STATUS: <span class="api-status" id="api-status" data-tone="neutral">probing</span></p>
     </div>
   </section>
@@ -849,7 +857,8 @@
     glEntries: [],
     planResources: [],
     planTimestamp: "",
-    source: "none"
+    source: "none",
+    dispatched: false
   };
 
   var els = {
@@ -863,6 +872,7 @@
     resetView: document.getElementById("reset-view"),
     ingestStatus: document.getElementById("ingest-status"),
     ingestMeta: document.getElementById("ingest-meta"),
+    ingestAck: document.getElementById("ingest-ack"),
     apiBase: document.getElementById("api-base"),
     apiStatus: document.getElementById("api-status"),
     ledgerBody: document.getElementById("ledger-body"),
@@ -1335,18 +1345,134 @@
     els.apiStatus.setAttribute("data-tone", tone || "neutral");
   }
 
-  /* A hand-rolled `fetch(url, { method: "OPTIONS" })` can never be read by the
-   * browser: API Gateway only attaches CORS headers when the OPTIONS request
-   * carries an `Access-Control-Request-Method` header, and fetch never sets it
-   * for an explicit OPTIONS. The request therefore comes back without
-   * `Access-Control-Allow-Origin` and is blocked by the CORS policy.
+  /* Transport contract: API Gateway only attaches CORS headers to a request
+   * that carries a real preflight, so every probe and every ingest is a JSON
+   * POST. A hand-rolled `fetch(url, { method: "OPTIONS" })` can never be read
+   * by the browser (fetch does not set `Access-Control-Request-Method` for an
+   * explicit OPTIONS), so it is never used here.
    *
-   * So the probe is a JSON POST instead. The browser emits its own native
-   * preflight (OPTIONS /ingest -> 204 from the CorsConfiguration), and the real
-   * request is stopped by envelope validation (400 INVALID_PAYLOAD) before any
-   * `sqs.send_message` runs — reachability is proven without contaminating
-   * AegisIngestionQueue. 200/202/400 all mean the gateway is live; transport
-   * failures degrade to a labelled state, never an exception. */
+   * `postJson` never rejects: transport faults are normalised into a result
+   * object so Zone A can print the exact HTTP status instead of throwing into
+   * the UI thread. */
+  var HTTP_LABELS = {
+    200: "200 OK",
+    202: "202 ACCEPTED",
+    400: "400 BAD REQUEST",
+    401: "401 UNAUTHORIZED",
+    403: "403 FORBIDDEN",
+    404: "404 NOT FOUND",
+    413: "413 PAYLOAD TOO LARGE",
+    429: "429 TOO MANY REQUESTS",
+    500: "500 INTERNAL ERROR",
+    502: "502 BAD GATEWAY",
+    503: "503 UNAVAILABLE",
+    504: "504 GATEWAY TIMEOUT"
+  };
+
+  function httpLabel(status) {
+    return HTTP_LABELS[status] || (String(status) + " HTTP STATUS");
+  }
+
+  function setAck(text, tone) {
+    if (!els.ingestAck) { return; }
+    els.ingestAck.textContent = text;
+    els.ingestAck.setAttribute("data-tone", tone || "neutral");
+  }
+
+  function transportFailure(error) {
+    return {
+      ok: false,
+      status: 0,
+      label: "NETWORK ERROR",
+      messageId: "",
+      detail: (error && error.message) ? error.message : "transport failure",
+      body: null
+    };
+  }
+
+  function postJson(envelope) {
+    if (typeof fetch !== "function") {
+      return Promise.resolve({
+        ok: false, status: 0, label: "NO FETCH", messageId: "",
+        detail: "Fetch API unavailable in this browser", body: null
+      });
+    }
+    return fetch(AEGIS_API_INGEST, {
+      method: "POST",
+      mode: "cors",
+      cache: "no-store",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(envelope)
+    })
+      .then(function (response) {
+        var label = httpLabel(response.status);
+        return response.text().then(function (text) {
+          var body = null;
+          try { body = text ? JSON.parse(text) : null; } catch (error) { body = null; }
+          var accepted = response.status === 200 || response.status === 202;
+          var messageId = "";
+          if (body && typeof body === "object") {
+            messageId = body.message_id || body.messageId || body.messageID || "";
+          }
+          var detail = accepted
+            ? ""
+            : String((body && (body.message || body.status)) || text || "empty body");
+          return {
+            ok: accepted,
+            status: response.status,
+            label: label,
+            messageId: String(messageId || ""),
+            detail: detail.slice(0, 180),
+            body: body
+          };
+        });
+      })
+      .catch(transportFailure);
+  }
+
+  /* Real E2E dispatch. The envelope is the queue contract consumed by
+   * src/functions/app.ingest_handler (REQUIRED_FIELDS = id / type / payload);
+   * `row_count` is measured from the parsed artifact, never invented. The
+   * gateway answer (202 + message_id) is mirrored into Zone A verbatim. */
+  function dispatchBatch(type, dataset, rowCount, button) {
+    var envelope = {
+      id: "batch-" + Date.now(),
+      type: type,
+      payload: { dataset: dataset, row_count: rowCount }
+    };
+    var summary = "TYPE: " + type + " · DATASET: " + dataset + " · ROWS: " + rowCount +
+      " · TRANSPORT: POST /ingest → SQS";
+
+    state.dispatched = true;
+    if (button) { button.disabled = true; }
+    setStatus("DISPATCHING " + type + " → POST /ingest", "amber");
+    setAck(summary, "amber");
+    if (els.ingestMeta) {
+      els.ingestMeta.textContent = "SOURCE: " + dataset +
+        " · PARSER: RFC4180 / JSON · TRANSPORT: POST /ingest (dataset + row_count only)";
+    }
+
+    return postJson(envelope).then(function (result) {
+      if (result.ok) {
+        var messageId = result.messageId || envelope.id;
+        setStatus("HTTP " + result.label + " · MESSAGE-ID " + messageId, "emerald");
+        setAck(summary, "emerald");
+        setApiStatus(result.label, "emerald");
+      } else {
+        setStatus("HTTP " + result.label + " · " + type + " REJECTED", "rose");
+        setAck(summary + " · ERROR: " + result.detail, "rose");
+        setApiStatus(result.label, "rose");
+      }
+      if (button) { button.disabled = false; }
+      return result;
+    });
+  }
+
+  /* Boot reachability probe. The envelope is deliberately incomplete
+   * (`{ probe: true }`): the gate answers 400 INVALID_PAYLOAD before any
+   * `sqs.send_message` executes, so liveness is proven without contaminating
+   * AegisIngestionQueue or paying for a queued message. 200/202/400 all mean
+   * the gateway is live; transport faults degrade to a labelled state. */
   function probeLiveApi() {
     if (els.apiBase) {
       els.apiBase.textContent = AEGIS_API_BASE;
@@ -1356,23 +1482,26 @@
       setApiStatus("no fetch", "amber");
       return;
     }
-    fetch(AEGIS_API_INGEST, {
-      method: "POST",
-      mode: "cors",
-      cache: "no-store",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ probe: true })
-    })
-      .then(function (response) {
-        /* Both 200, 202, or 400 (validation fail) confirm API Gateway is reachable */
-        if (response.status === 200 || response.status === 202 || response.status === 400) {
-          setApiStatus("online", "emerald");
-        } else {
-          setApiStatus("http " + response.status, "amber");
+    postJson({ probe: true }).then(function (result) {
+      if (result.status === 400 || result.status === 202 || result.status === 200) {
+        setApiStatus("online", "emerald");
+        if (!state.dispatched) {
+          setAck("TYPE: — · DATASET: — · ROWS: 0 · REACHABILITY " + result.label + " · TRANSPORT: POST /ingest", "neutral");
         }
-      }, function () {
+        return;
+      }
+      if (result.status === 0) {
         setApiStatus("unreachable", "rose");
-      });
+        if (!state.dispatched) {
+          setAck("TRANSPORT: POST /ingest · " + result.detail, "rose");
+        }
+        return;
+      }
+      setApiStatus("http " + result.status, "amber");
+      if (!state.dispatched) {
+        setAck("TRANSPORT: POST /ingest · " + result.label, "amber");
+      }
+    });
   }
 
   /* ============================ INGEST LAYER ============================ */
@@ -1477,6 +1606,14 @@
       "amber",
       "fixtures/stripe_settlements.csv + fixtures/internal_gl.csv"
     );
+    /* E2E: render locally *and* queue the batch through the live gateway.
+     * row_count is the measured sum of both parsed artifacts (6 + 6). */
+    dispatchBatch(
+      "RECONCILE_BATCH",
+      "fixtures/stripe_settlements.csv+fixtures/internal_gl.csv",
+      state.settlements.length + state.glEntries.length,
+      els.loadStripe
+    );
   }
 
   function loadPlanFixture() {
@@ -1487,6 +1624,12 @@
       "amber",
       "fixtures/tfplan.json"
     );
+    dispatchBatch(
+      "ZOMBIE_SCAN",
+      "fixtures/tfplan.json",
+      state.planResources.length,
+      els.loadTfplan
+    );
   }
 
   function resetView() {
@@ -1495,8 +1638,11 @@
     state.planResources = [];
     state.planTimestamp = "";
     state.source = "none";
+    state.dispatched = false;
     setStatus("AWAITING INGEST — no dataset loaded", "neutral", "none");
     els.ingestMeta.textContent = "SOURCE: — · PARSER: RFC4180 / JSON · TRANSPORT: local file only";
+    setAck("TYPE: — · DATASET: — · ROWS: 0 · TRANSPORT: POST /ingest → SQS", "neutral");
+    probeLiveApi();
     setApp("reconciler");
   }
 

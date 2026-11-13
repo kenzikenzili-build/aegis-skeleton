@@ -14,3 +14,15 @@ venv/
 Thumbs.db
 .vscode/
 .idea/
+
+# ---------------------------------------------------------------------------
+# Kiro governance assets are VERSIONED, not ignored.
+# `.kiro/steering/zero-idle-constitution.md`, `.kiro/settings/mcp.json`,
+# `.kiro/specs/` and `.kiro/hooks/` are first-class build artifacts: the
+# constitution and the MCP registry must travel with the code so a fresh clone
+# is governed on the first commit. Never add `.kiro/` (or any path inside it)
+# to this file.
+# ---------------------------------------------------------------------------
+!.kiro/
+!.kiro/**
+
