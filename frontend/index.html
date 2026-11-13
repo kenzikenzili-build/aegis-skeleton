@@ -166,8 +166,10 @@ a { color: var(--accent); }
    Frosted top navigation
    -------------------------------------------------------------------------- */
 .topbar {
-  position: sticky;
-  top: 0;
+  /* Static, in-flow header. The previous two-row sticky bar overlapped the KPI
+     Bento grid and the ledger header once the page scrolled; the frosted glass
+     treatment is kept, only the sticky positioning is removed. */
+  position: relative;
   z-index: 30;
   display: grid;
   gap: 10px;
@@ -570,23 +572,35 @@ a { color: var(--accent); }
 .receipt-foot {
   display: flex; align-items: center; gap: 7px;
   padding-top: 8px;
+  margin-top: auto;
   border-top: 1px solid var(--line-soft);
   font-family: var(--font-mono);
   font-size: 9.5px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
   color: var(--faint);
 }
+.receipt-foot[data-tone="emerald"] { color: var(--emerald); }
+.receipt-foot[data-tone="amber"] { color: var(--amber); }
+.receipt-foot[data-tone="rose"] { color: var(--rose); }
 
 /* --------------------------------------------------------------------------
-   Zone B — General Ledger reconciliation table
+   Zone B — General Ledger reconciliation table + unified main content stack.
+   Every zone is in normal flow with `height: auto`, so a zone can only ever be
+   as tall as the rows it actually renders. The former 65fr / 35fr grid paired
+   `min-height: 486px` with a `flex: 1` table viewport, which left empty white
+   blocks under short ledgers and overlapped the sticky top bar.
    -------------------------------------------------------------------------- */
 .console-grid {
   display: grid;
-  grid-template-columns: minmax(0, 65fr) minmax(320px, 35fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 14px;
-  align-items: start;
 }
-.zone-c { display: grid; gap: 14px; }
-.zone-b { display: flex; flex-direction: column; min-height: 486px; overflow: hidden; }
+.zone-c {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  align-items: stretch;
+}
+.zone-b { display: flex; flex-direction: column; overflow: hidden; }
 .zone-head {
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
   flex-wrap: wrap;
@@ -617,7 +631,10 @@ a { color: var(--accent); }
   background: var(--surface-inset);
 }
 
-.table-scroll { flex: 1; overflow: auto; }
+/* The table viewport grows with its rows and is only capped so a long ledger
+   scrolls inside the card (keeping the sticky, opaque header useful) instead of
+   pushing the page forever. A `max-height` never reserves empty space. */
+.table-scroll { overflow: auto; max-height: 68vh; }
 .ledger {
   width: 100%; min-width: 900px;
   border-collapse: separate; border-spacing: 0;
@@ -648,6 +665,7 @@ a { color: var(--accent); }
 .col-time { color: var(--faint); white-space: nowrap; }
 .col-id { color: var(--text); font-weight: 500; white-space: nowrap; }
 .col-type { font-family: var(--font-mono); font-size: 11.5px; white-space: nowrap; }
+.col-profile { color: var(--text); font-weight: 500; white-space: nowrap; }
 .col-amount { color: var(--text); font-weight: 600; text-align: right; white-space: nowrap; }
 .col-variance { text-align: right; font-weight: 600; white-space: nowrap; }
 .tone-emerald { color: var(--emerald); }
@@ -815,6 +833,38 @@ a { color: var(--accent); }
 
 
 /* --------------------------------------------------------------------------
+   Strict progressive disclosure.
+   Business view (X-Ray OFF, default): accounting vocabulary only — no HTTP
+   status codes, no parser/RFC traces, no POST/envelope payloads, no PK/SK.
+   Engineering view (X-Ray ON): the same live values are additionally exposed as
+   raw AWS telemetry. Both projections are written from the same fetch results;
+   nothing here ever prints a state the transport has not actually returned.
+   -------------------------------------------------------------------------- */
+.xray-copy { display: none; }
+.tech-only { display: none; }
+.tech-inline { display: none; }
+body.is-xray .business-only,
+body.is-xray .business-inline { display: none; }
+body.is-xray .xray-copy { display: inline; }
+body.is-xray .tech-only { display: block; }
+body.is-xray .tech-inline { display: inline-flex; }
+/* Rows in the governance deck must keep their flex layout when revealed. */
+body.is-xray .gov-row.tech-only { display: flex; }
+
+.ingest-business {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 13.5px; font-weight: 600; line-height: 1.45; letter-spacing: 0.005em;
+  color: var(--text-secondary);
+}
+.ingest-business::before {
+  content: ""; width: 6px; height: 6px; flex: none; border-radius: 50%;
+  background: currentColor; opacity: 0.85;
+}
+.ingest-business[data-tone="emerald"] { color: var(--emerald); }
+.ingest-business[data-tone="amber"] { color: var(--amber); }
+.ingest-business[data-tone="rose"] { color: var(--rose); }
+
+/* --------------------------------------------------------------------------
    Engineering X-Ray mode — DynamoDB PK/SK + Kiro AST smite guard
    -------------------------------------------------------------------------- */
 body.is-xray .bento {
@@ -856,9 +906,8 @@ body.is-xray::after {
    Responsive + reduced motion
    -------------------------------------------------------------------------- */
 @media (max-width: 1180px) {
-  .console-grid { grid-template-columns: minmax(0, 1fr); }
-  .zone-c { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .zone-c { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 860px) {
   .shell { padding: 0 14px 32px; }
@@ -939,7 +988,8 @@ body.is-xray::after {
       </nav>
       <div class="nav-meta">
         <span class="live-dot" aria-hidden="true"></span>
-        AWS us-east-1 &middot; HTTP API v2 &rarr; SQS &rarr; DynamoDB
+        <span class="business-inline">Live AWS Connection &middot; us-east-1 &middot; Secure Channel</span>
+        <span class="xray-copy">AWS us-east-1 &middot; HTTP API v2 &rarr; SQS &rarr; DynamoDB</span>
       </div>
     </div>
   </header>
@@ -998,35 +1048,46 @@ body.is-xray::after {
           <span class="dropzone-kicker">Accounting Upload</span>
           <h2 class="dropzone-title" id="ingest-heading">Drop settlement or Terraform artifacts</h2>
         </div>
-        <span class="dropzone-badge">LOCAL PARSE &middot; ZERO MOCK</span>
+        <span class="dropzone-badge tech-inline">LOCAL PARSE &middot; ZERO MOCK</span>
       </div>
       <p class="dropzone-hint" id="ingest-hint">
         Drop <code>stripe_settlements.csv</code>, <code>internal_gl.csv</code> or
-        <code>tfplan.json</code> &mdash; or click to browse. Files are parsed locally with
-        an RFC&nbsp;4180 reader; only <code>dataset</code> and the measured
-        <code>row_count</code> are POSTed to <code>/ingest</code>. Nothing is invented.
+        <code>tfplan.json</code> &mdash; or click to browse.
+        <span class="business-inline">Settlements are matched against the ledger inside this browser session.</span>
+        <span class="tech-inline">Files are parsed locally with an RFC&nbsp;4180 / JSON reader; only <code>dataset</code> and the measured <code>row_count</code> are POSTed to <code>/ingest</code>.</span>
+        Nothing is invented.
       </p>
       <div class="pill-row">
         <button type="button" class="pill" id="load-stripe">
-          <span class="pill-tag">01</span>Load Stripe vs GL Fixture
+          <span class="pill-tag tech-inline">01</span>
+          <span class="business-inline">Run Sample Settlement Audit</span>
+          <span class="xray-copy">Load Stripe vs GL Fixture</span>
         </button>
         <button type="button" class="pill" id="load-tfplan">
-          <span class="pill-tag">02</span>Load Zombie tfplan.json
+          <span class="pill-tag tech-inline">02</span>
+          <span class="business-inline">Run Sample Cloud Waste Scan</span>
+          <span class="xray-copy">Load Zombie tfplan.json</span>
         </button>
       </div>
       <input type="file" id="file-input" class="sr-only" accept=".csv,.json,text/csv,application/json" multiple>
     </div>
 
-    <aside class="ingest-panel receipt" aria-label="AWS ingest receipt">
+    <aside class="ingest-panel receipt" aria-label="Ingest gateway receipt">
       <div class="receipt-head">
-        <span class="ingest-kicker">AWS Ingest Receipt</span>
-        <span class="badge badge-neutral">POST /ingest</span>
+        <span class="ingest-kicker">
+          <span class="business-inline">Settlement Gateway Receipt</span>
+          <span class="xray-copy">AWS Ingest Receipt</span>
+        </span>
+        <span class="badge badge-neutral tech-inline">POST /ingest</span>
+        <span class="badge badge-emerald business-inline">HTTPS &middot; SECURE CHANNEL</span>
       </div>
-      <p class="ingest-status" id="ingest-status" data-tone="neutral" role="status" aria-live="polite">AWAITING INGEST &mdash; no dataset loaded</p>
-      <p class="ingest-meta" id="ingest-meta">SOURCE: &mdash; &middot; PARSER: RFC4180 / JSON &middot; TRANSPORT: local file only</p>
-      <p class="ingest-ack" id="ingest-ack" data-tone="neutral" role="status" aria-live="polite">TYPE: &mdash; &middot; DATASET: &mdash; &middot; ROWS: 0 &middot; TRANSPORT: POST /ingest &rarr; SQS</p>
-      <p class="ingest-meta" id="ingest-api">API: <code id="api-base">https://u3geom1dc0.execute-api.us-east-1.amazonaws.com</code> &middot; STATUS: <span class="api-status" id="api-status" data-tone="neutral">probing</span></p>
-      <div class="receipt-foot"><span class="live-dot" aria-hidden="true"></span> 202 ACCEPTED &rarr; SQS &rarr; DYNAMODB</div>
+      <p class="ingest-status tech-only" id="ingest-status" data-tone="neutral" role="status" aria-live="polite">AWAITING INGEST &mdash; no dataset loaded</p>
+      <p class="ingest-business business-only" id="ingest-business" data-tone="neutral" role="status" aria-live="polite">Establishing secure channel &middot; verifying gateway</p>
+      <p class="ingest-meta tech-only" id="ingest-meta">SOURCE: &mdash; &middot; PARSER: RFC4180 / JSON &middot; TRANSPORT: local file only</p>
+      <p class="ingest-ack tech-only" id="ingest-ack" data-tone="neutral" role="status" aria-live="polite">TYPE: &mdash; &middot; DATASET: &mdash; &middot; ROWS: 0 &middot; TRANSPORT: POST /ingest &rarr; SQS</p>
+      <p class="ingest-meta tech-only" id="ingest-api">API: <code id="api-base">https://u3geom1dc0.execute-api.us-east-1.amazonaws.com</code> &middot; STATUS: <span class="api-status" id="api-status" data-tone="neutral">probing</span></p>
+      <p class="ingest-meta tech-only" id="ingest-payload">PAYLOAD: &mdash; &middot; no batch dispatched</p>
+      <div class="receipt-foot" id="receipt-foot" data-tone="neutral"><span class="live-dot" aria-hidden="true"></span><span id="receipt-foot-text">AWAITING FIRST LIVE RESPONSE</span></div>
     </aside>
   </section>
 
@@ -1035,7 +1096,7 @@ body.is-xray::after {
     <section class="bento zone-b" aria-labelledby="ledger-heading">
       <div class="zone-head">
         <div class="zone-title">
-          <span class="zone-kicker">General Ledger</span>
+          <span class="zone-kicker" id="ledger-kicker">General Ledger</span>
           <h2 class="zone-name" id="ledger-heading">Payment Reconciliation Pipeline</h2>
         </div>
         <div class="zone-meta">
@@ -1047,19 +1108,18 @@ body.is-xray::after {
 
       <div class="table-scroll">
         <table class="ledger">
-          <caption class="sr-only">
+          <caption class="sr-only" id="ledger-caption">
             Payment reconciliation ledger: posting time in UTC, journal reference, record type,
-            gross amount, general ledger variance, reconciliation status and the DynamoDB audit trail keys.
+            gross amount, general ledger variance and reconciliation status.
           </caption>
           <thead>
-            <tr>
+            <tr id="ledger-head-row">
               <th scope="col">Posted (UTC)</th>
               <th scope="col">Journal Ref</th>
               <th scope="col">Record Type</th>
               <th scope="col" class="th-amount">Gross Amount</th>
               <th scope="col" class="th-variance">GL Variance</th>
               <th scope="col">Reconciliation</th>
-              <th scope="col">Audit Trail (PK / SK)</th>
             </tr>
           </thead>
           <tbody id="ledger-body"></tbody>
@@ -1067,8 +1127,8 @@ body.is-xray::after {
       </div>
 
       <p class="zone-foot" id="zone-foot">
-        ZERO-MOCK &middot; every row originates from an ingested artifact &middot; integer-cent arithmetic in the view,
-        authoritative <code>decimal.Decimal</code> reconciliation in <code>apps/grim-reconciler</code>.
+        ZERO-MOCK &middot; every row originates from an ingested artifact.
+        <span class="tech-inline">Integer-cent arithmetic in the view; authoritative <code>decimal.Decimal</code> reconciliation in <code>apps/grim-reconciler</code>.</span>
       </p>
     </section>
 
@@ -1081,10 +1141,6 @@ body.is-xray::after {
             <span class="card-kicker">ZONE C &middot; 01</span>
             <span class="badge badge-violet only-kiroween" id="zombie-badge">ZOMBIE SCAN READY</span>
           </div>
-        </div>
-        <div class="metric-row">
-          <span class="metric-label">IDLE OVERHEAD</span>
-          <span class="metric-value is-emerald num">$0.0000<span class="unit">/ HR</span></span>
         </div>
         <div class="metric-row">
           <span class="metric-label">P99 EXECUTION</span>
@@ -1123,11 +1179,11 @@ body.is-xray::after {
             <dt>SPEC COMPLIANCE</dt>
             <dd class="num">100%</dd>
           </div>
-          <div class="gov-row">
+          <div class="gov-row tech-only">
             <dt>SINGLE-TABLE SCHEMA</dt>
             <dd class="num">PK / SK &middot; TTL</dd>
           </div>
-          <div class="gov-row">
+          <div class="gov-row tech-only">
             <dt>COMPUTE PROFILE</dt>
             <dd class="num">ARM64 &middot; 256MB &middot; 10s</dd>
           </div>
@@ -1136,7 +1192,7 @@ body.is-xray::after {
             <dd class="num">decimal.Decimal</dd>
           </div>
         </dl>
-        <p class="card-foot">Kiro rules 1&ndash;4 &middot; .kiro/steering/architecture.md</p>
+        <p class="card-foot tech-only">Kiro rules 1&ndash;4 &middot; .kiro/steering/architecture.md</p>
       </section>
 
       <section class="bento card" aria-labelledby="manifest-heading">
@@ -1336,13 +1392,22 @@ body.is-xray::after {
     loadTfplan: document.getElementById("load-tfplan"),
     resetView: document.getElementById("reset-view"),
     ingestStatus: document.getElementById("ingest-status"),
+    ingestBusiness: document.getElementById("ingest-business"),
     ingestMeta: document.getElementById("ingest-meta"),
     ingestAck: document.getElementById("ingest-ack"),
+    ingestPayload: document.getElementById("ingest-payload"),
+    receiptFoot: document.getElementById("receipt-foot"),
+    receiptFootText: document.getElementById("receipt-foot-text"),
     apiBase: document.getElementById("api-base"),
     apiStatus: document.getElementById("api-status"),
     ledgerBody: document.getElementById("ledger-body"),
+    ledgerHead: document.getElementById("ledger-head-row"),
+    ledgerCaption: document.getElementById("ledger-caption"),
+    ledgerKicker: document.getElementById("ledger-kicker"),
+    ledgerHeading: document.getElementById("ledger-heading"),
     tableApp: document.getElementById("table-app"),
     tableCount: document.getElementById("table-count"),
+    manifestHeading: document.getElementById("manifest-heading"),
     finopsWasteValue: document.getElementById("finops-waste-value"),
     finopsMeter: document.getElementById("finops-meter"),
     finopsNote: document.getElementById("finops-waste-note"),
@@ -1551,13 +1616,15 @@ body.is-xray::after {
       if (type === "aws_ebs_volume") {
         var size = Number(values.size) || 0;
         var attached = Array.isArray(values.attachments) && values.attachments.length > 0;
-        var monthlyCents = Math.round(size * GP3_USD_PER_GB_MONTH * 100);
+        /* gp3 list price is quoted per GB-month; the ledger column is hourly, so
+           the burn is divided by 730 h and kept in micro-dollars. */
+        var idleMicros = Math.round(size * GP3_USD_PER_GB_MONTH * 1000000 / HOURS_PER_MONTH);
         rows.push({
           timeUtc: timestamp,
           recordId: address,
           type: type,
           primary: size + " GB " + (values.type || "?"),
-          variance: attached ? "0.00" : "+" + centsToUsd(monthlyCents) + " / MO",
+          variance: attached ? "$0.0000 / HR" : "+" + microsToUsd(idleMicros) + " / HR",
           varianceTone: attached ? "emerald" : "rose",
           statusLabel: attached ? "ATTACHED" : "PHANTOM VOLUME",
           statusTone: attached ? "emerald" : "rose",
@@ -1599,7 +1666,7 @@ body.is-xray::after {
           recordId: address,
           type: type,
           primary: values.billing_mode || "—",
-          variance: "0.00",
+          variance: "$0.0000 / HR",
           varianceTone: ttlEnabled ? "emerald" : "rose",
           statusLabel: ttlEnabled ? "SCHEMA COMPLIANT" : "TTL DISABLED",
           statusTone: ttlEnabled ? "emerald" : "rose",
@@ -1619,7 +1686,7 @@ body.is-xray::after {
         recordId: address,
         type: type,
         primary: (values.memory_size === undefined ? "?" : values.memory_size) + " MB · " + architectures.toUpperCase(),
-        variance: "0.00",
+        variance: "$0.0000 / HR",
         varianceTone: graviton ? "emerald" : "amber",
         statusLabel: graviton ? "GRAVITON COMPLIANT" : "ARCH DRIFT",
         statusTone: graviton ? "emerald" : "amber",
@@ -1654,13 +1721,69 @@ body.is-xray::after {
     return cell;
   }
 
+  /* --------------------- Contextual table columns ---------------------
+   * The ledger is one surface with two accounting contexts. `reconciler`
+   * speaks in journal references and GL variance; `finops` speaks in resource
+   * addresses and idle waste. The header is rebuilt from this table on every
+   * render so the column labels can never drift from the row payload, and the
+   * DynamoDB PK / SK column only exists while Engineering X-Ray is on. */
+  var COLUMN_SETS = {
+    reconciler: [
+      { label: "Posted (UTC)" },
+      { label: "Journal Ref" },
+      { label: "Record Type" },
+      { label: "Gross Amount", headClass: "th-amount" },
+      { label: "GL Variance", headClass: "th-variance" },
+      { label: "Reconciliation" }
+    ],
+    finops: [
+      { label: "Plan (UTC)" },
+      { label: "Resource ID" },
+      { label: "Type" },
+      { label: "Profile" },
+      { label: "Waste / Hr", headClass: "th-variance" },
+      { label: "Action" }
+    ]
+  };
+
+  var TABLE_CAPTIONS = {
+    reconciler: "Payment reconciliation ledger: posting time in UTC, journal reference, record type, gross amount, general ledger variance and reconciliation status.",
+    finops: "Cloud FinOps ledger: Terraform plan timestamp, resource address, resource type, declared profile, measured idle waste per hour and remediation action."
+  };
+
+  function tableColumns() {
+    var columns = COLUMN_SETS[state.app] || COLUMN_SETS.reconciler;
+    if (state.xray) {
+      columns = columns.concat([{ label: "Audit Trail (PK / SK)" }]);
+    }
+    return columns;
+  }
+
+  function renderTableHead() {
+    if (!els.ledgerHead) { return; }
+    els.ledgerHead.textContent = "";
+    tableColumns().forEach(function (column) {
+      var th = document.createElement("th");
+      th.setAttribute("scope", "col");
+      if (column.headClass) { th.className = column.headClass; }
+      th.textContent = column.label;
+      els.ledgerHead.appendChild(th);
+    });
+    if (els.ledgerCaption) {
+      var caption = TABLE_CAPTIONS[state.app] || TABLE_CAPTIONS.reconciler;
+      els.ledgerCaption.textContent = state.xray
+        ? caption + " DynamoDB audit trail keys are exposed for this row set."
+        : caption;
+    }
+  }
+
   function buildRow(row) {
     var tr = document.createElement("tr");
 
     appendCell(tr, row.timeUtc, "col-time num");
     appendCell(tr, row.recordId, "col-id num");
     appendCell(tr, row.type, "col-type");
-    appendCell(tr, row.primary, "col-amount num");
+    appendCell(tr, row.primary, state.app === "finops" ? "col-profile" : "col-amount num");
     appendCell(tr, row.variance, "col-variance num tone-" + row.varianceTone);
 
     var statusCell = document.createElement("td");
@@ -1684,18 +1807,22 @@ body.is-xray::after {
     statusCell.appendChild(ast);
     tr.appendChild(statusCell);
 
-    var ddbCell = document.createElement("td");
-    ddbCell.className = "col-ddb";
-    var pk = document.createElement("span");
-    pk.className = "ddb-pk num";
-    pk.textContent = "PK: " + row.partitionKey;
-    var sk = document.createElement("span");
-    sk.className = "ddb-sk num";
-    sk.textContent = "SK: " + row.sortKey;
-    sk.title = sk.textContent;
-    ddbCell.appendChild(pk);
-    ddbCell.appendChild(sk);
-    tr.appendChild(ddbCell);
+    /* DynamoDB PK / SK is engineering telemetry: it is only materialised while
+       X-Ray is on, so the business view never carries storage keys. */
+    if (state.xray) {
+      var ddbCell = document.createElement("td");
+      ddbCell.className = "col-ddb";
+      var pk = document.createElement("span");
+      pk.className = "ddb-pk num";
+      pk.textContent = "PK: " + row.partitionKey;
+      var sk = document.createElement("span");
+      sk.className = "ddb-sk num";
+      sk.textContent = "SK: " + row.sortKey;
+      sk.title = sk.textContent;
+      ddbCell.appendChild(pk);
+      ddbCell.appendChild(sk);
+      tr.appendChild(ddbCell);
+    }
 
     return tr;
   }
@@ -1706,7 +1833,7 @@ body.is-xray::after {
       var emptyRow = document.createElement("tr");
       emptyRow.className = "row-empty";
       var cell = document.createElement("td");
-      cell.colSpan = 7;
+      cell.colSpan = tableColumns().length;
       cell.innerHTML = "<strong>NO DATA INGESTED</strong><br>" +
         "Drop <code>stripe_settlements.csv</code> + <code>internal_gl.csv</code> or " +
         "<code>tfplan.json</code>, or use a quick-load pill above.";
@@ -1740,8 +1867,11 @@ body.is-xray::after {
     els.manifestMatched.textContent = String(matched);
     els.manifestDrift.textContent = String(drift);
     els.manifestCritical.textContent = String(critical);
-    els.manifestDataset.textContent = "DATASET: " + datasetLabel() +
-      " · TOLERANCE: ±$0.02 · SOURCE: " + state.source;
+    els.manifestDataset.textContent = state.app === "finops"
+      ? "DATASET: " + datasetLabel() +
+        " · PLAN: " + (state.planTimestamp || "—") + " · SOURCE: " + state.source
+      : "DATASET: " + datasetLabel() +
+        " · TOLERANCE: ±$0.02 · SOURCE: " + state.source;
   }
   function finopsMetrics() {
     var metrics = { total: state.planResources.length, flagged: 0, microsPerHour: 0 };
@@ -1778,12 +1908,27 @@ body.is-xray::after {
 
   function render() {
     var rows = currentRows();
+    var finops = state.app === "finops";
+    renderTableHead();
     renderLedger(rows);
     renderManifest(rows);
     renderFinopsCard();
-    els.tableApp.textContent = state.app === "finops"
+    els.tableApp.textContent = finops
       ? "PHANTOMGUARD · CLOUD FINOPS"
       : "GRIMRECONCILER · FINANCIAL GL";
+    if (els.ledgerKicker) {
+      els.ledgerKicker.textContent = finops ? "Cloud FinOps" : "General Ledger";
+    }
+    if (els.ledgerHeading) {
+      els.ledgerHeading.textContent = finops
+        ? "Phantom Resource Sweep"
+        : "Payment Reconciliation Pipeline";
+    }
+    if (els.manifestHeading) {
+      els.manifestHeading.textContent = finops
+        ? "Cloud Waste Manifest"
+        : "General Ledger Variance";
+    }
     els.tableCount.textContent = rows.length + (rows.length === 1 ? " ROW" : " ROWS");
     renderKpis(rows);
   }
@@ -1859,12 +2004,41 @@ body.is-xray::after {
     document.body.classList.toggle("is-xray", state.xray);
     els.xrayToggle.checked = state.xray;
     els.xrayState.textContent = state.xray ? "ON" : "OFF";
+    /* Re-project the ledger: the PK / SK column is materialised or removed with
+       the toggle, so the rendered table always matches the visible mode. */
+    render();
   }
   /* ============================ LIVE API BINDING ============================ */
   function setApiStatus(label, tone) {
     if (!els.apiStatus) { return; }
     els.apiStatus.textContent = label;
     els.apiStatus.setAttribute("data-tone", tone || "neutral");
+  }
+
+  /* Business projection of the same transport events. This is the only line the
+     default (X-Ray OFF) receipt shows: business vocabulary, no status codes, no
+     parser names, no payloads. It is written from real fetch results, so it can
+     never claim a channel state the gateway did not answer. */
+  function setBusinessStatus(text, tone) {
+    if (!els.ingestBusiness) { return; }
+    els.ingestBusiness.textContent = text;
+    els.ingestBusiness.setAttribute("data-tone", tone || "neutral");
+  }
+
+  /* Receipt stamp: the verbatim gateway result, printed only once the fetch has
+     actually resolved. Before that it states that nothing has been queued. */
+  function setReceiptFoot(text, tone) {
+    if (!els.receiptFootText) { return; }
+    els.receiptFootText.textContent = text;
+    if (els.receiptFoot) { els.receiptFoot.setAttribute("data-tone", tone || "neutral"); }
+  }
+
+  /* Exact JSON envelope that POST /ingest received (X-Ray only). */
+  function setPayload(envelope) {
+    if (!els.ingestPayload) { return; }
+    els.ingestPayload.textContent = envelope
+      ? "PAYLOAD: " + JSON.stringify(envelope)
+      : "PAYLOAD: — · no batch dispatched";
   }
 
   /* Transport contract: API Gateway only attaches CORS headers to a request
@@ -1967,8 +2141,11 @@ body.is-xray::after {
 
     state.dispatched = true;
     if (button) { button.disabled = true; }
-    setStatus("DISPATCHING " + type + " → POST /ingest", "amber");
+    setStatus("DISPATCHING " + type + " → POST /ingest", "amber", null, null);
     setAck(summary, "amber");
+    setBusinessStatus("Submitting batch through the secure channel…", "amber");
+    setReceiptFoot("AWAITING GATEWAY RESPONSE", "amber");
+    setPayload(envelope);
     if (els.ingestMeta) {
       els.ingestMeta.textContent = "SOURCE: " + dataset +
         " · PARSER: RFC4180 / JSON · TRANSPORT: POST /ingest (dataset + row_count only)";
@@ -1977,13 +2154,17 @@ body.is-xray::after {
     return postJson(envelope).then(function (result) {
       if (result.ok) {
         var messageId = result.messageId || envelope.id;
-        setStatus("HTTP " + result.label + " · MESSAGE-ID " + messageId, "emerald");
+        setStatus("HTTP " + result.label + " · MESSAGE-ID " + messageId, "emerald", null, null);
         setAck(summary, "emerald");
         setApiStatus(result.label, "emerald");
+        setBusinessStatus("Batch accepted · settled through secure channel", "emerald");
+        setReceiptFoot(result.label + " → SQS → DYNAMODB", "emerald");
       } else {
-        setStatus("HTTP " + result.label + " · " + type + " REJECTED", "rose");
+        setStatus("HTTP " + result.label + " · " + type + " REJECTED", "rose", null, null);
         setAck(summary + " · ERROR: " + result.detail, "rose");
         setApiStatus(result.label, "rose");
+        setBusinessStatus("Batch not accepted · nothing was queued", "rose");
+        setReceiptFoot("REQUEST FAILED · NOTHING QUEUED", "rose");
       }
       if (button) { button.disabled = false; }
       return result;
@@ -2007,6 +2188,8 @@ body.is-xray::after {
     postJson({ probe: true }).then(function (result) {
       if (result.status === 400 || result.status === 202 || result.status === 200) {
         setApiStatus("online", "emerald");
+        setBusinessStatus("Gateway Ready · Secure Channel", "emerald");
+        setReceiptFoot("SECURE CHANNEL VERIFIED · NO BATCH DISPATCHED", "emerald");
         if (!state.dispatched) {
           setAck("TYPE: — · DATASET: — · ROWS: 0 · REACHABILITY " + result.label + " · TRANSPORT: POST /ingest", "neutral");
         }
@@ -2014,12 +2197,16 @@ body.is-xray::after {
       }
       if (result.status === 0) {
         setApiStatus("unreachable", "rose");
+        setBusinessStatus("Secure channel unavailable · gateway unreachable", "rose");
+        setReceiptFoot("NO LIVE RESPONSE · NOTHING QUEUED", "rose");
         if (!state.dispatched) {
           setAck("TRANSPORT: POST /ingest · " + result.detail, "rose");
         }
         return;
       }
       setApiStatus("http " + result.status, "amber");
+      setBusinessStatus("Gateway reachable · degraded status " + result.status, "amber");
+      setReceiptFoot("GATEWAY RESPONDED · DEGRADED CHANNEL", "amber");
       if (!state.dispatched) {
         setAck("TRANSPORT: POST /ingest · " + result.label, "amber");
       }
@@ -2027,9 +2214,18 @@ body.is-xray::after {
   }
 
   /* ============================ INGEST LAYER ============================ */
-  function setStatus(message, tone, source) {
+  /* `#ingest-status` carries the raw technical outcome and is only rendered in
+     X-Ray. `businessMessage` is the accounting-vocabulary mirror written to
+     `#ingest-business`; pass `null` to leave the business line untouched. */
+  function setStatus(message, tone, source, businessMessage) {
     els.ingestStatus.textContent = message;
     els.ingestStatus.setAttribute("data-tone", tone || "neutral");
+    if (businessMessage !== null) {
+      setBusinessStatus(
+        businessMessage === undefined ? message : businessMessage,
+        tone
+      );
+    }
     if (source) {
       state.source = source;
       els.ingestMeta.textContent = "SOURCE: " + source + " · PARSER: RFC4180 / JSON · TRANSPORT: local file only";
@@ -2039,23 +2235,25 @@ body.is-xray::after {
   function ingestCsv(name, text) {
     var records = parseCsv(text);
     if (!records.length) {
-      setStatus(name + " · NO DATA ROWS PARSED", "rose", name);
+      setStatus(name + " · NO DATA ROWS PARSED", "rose", name, "Artifact rejected · no data rows found");
       return;
     }
     var header = Object.keys(records[0]);
     if (header.indexOf("balance_transaction") !== -1 && header.indexOf("net_decimal") !== -1) {
       state.settlements = records;
-      setStatus("STRIPE SETTLEMENTS · " + records.length + " ROWS (UTC)", "emerald", name);
+      setStatus("STRIPE SETTLEMENTS · " + records.length + " ROWS (UTC)", "emerald", name,
+        "Settlement batch parsed · " + records.length + " records");
       setApp("reconciler");
       return;
     }
     if (header.indexOf("source_ref") !== -1 && header.indexOf("net_amount") !== -1) {
       state.glEntries = records;
-      setStatus("INTERNAL GL · " + records.length + " ROWS (EST → UTC)", "emerald", name);
+      setStatus("INTERNAL GL · " + records.length + " ROWS (EST → UTC)", "emerald", name,
+        "Ledger extract parsed · " + records.length + " entries");
       setApp("reconciler");
       return;
     }
-    setStatus(name + " · UNKNOWN CSV SCHEMA", "rose", name);
+    setStatus(name + " · UNKNOWN CSV SCHEMA", "rose", name, "Artifact rejected · unrecognised settlement schema");
   }
 
   function ingestJson(name, text) {
@@ -2063,24 +2261,25 @@ body.is-xray::after {
     try {
       plan = JSON.parse(text);
     } catch (error) {
-      setStatus(name + " · JSON PARSE ERROR", "rose", name);
+      setStatus(name + " · JSON PARSE ERROR", "rose", name, "Artifact rejected · not a valid Terraform plan");
       return;
     }
     var resources = collectPlanResources(plan);
     if (!resources.length) {
-      setStatus(name + " · NO planned_values RESOURCES", "rose", name);
+      setStatus(name + " · NO planned_values RESOURCES", "rose", name, "Artifact rejected · no planned resources found");
       return;
     }
     state.planResources = resources;
     state.planTimestamp = plan.timestamp || "";
-    setStatus("TERRAFORM PLAN · " + resources.length + " RESOURCES", "amber", name);
+    setStatus("TERRAFORM PLAN · " + resources.length + " RESOURCES", "amber", name,
+      "Cloud plan parsed · " + resources.length + " resources");
     setApp("finops");
   }
 
   function ingestText(name, text) {
     var trimmed = String(text === undefined || text === null ? "" : text).trim();
     if (!trimmed) {
-      setStatus(name + " · EMPTY ARTIFACT", "rose", name);
+      setStatus(name + " · EMPTY ARTIFACT", "rose", name, "Artifact rejected · the file is empty");
       return;
     }
     var first = trimmed.charAt(0);
@@ -2092,7 +2291,8 @@ body.is-xray::after {
       ingestCsv(name, trimmed);
       return;
     }
-    setStatus(name + " · UNRECOGNIZED FORMAT (expect .csv or .json)", "rose", name);
+    setStatus(name + " · UNRECOGNIZED FORMAT (expect .csv or .json)", "rose", name,
+      "Artifact rejected · only CSV or JSON plans are accepted");
   }
 
   function readFileText(file) {
@@ -2115,7 +2315,8 @@ body.is-xray::after {
         });
       });
     }, Promise.resolve()).catch(function (error) {
-      setStatus("FILE READ FAILED · " + (error && error.message ? error.message : "unknown"), "rose");
+      setStatus("FILE READ FAILED · " + (error && error.message ? error.message : "unknown"), "rose",
+        null, "Artifact rejected · the file could not be read");
     });
   }
   /* ------------------------------ Quick loads ------------------------------ */
@@ -2126,7 +2327,9 @@ body.is-xray::after {
     setStatus(
       "FIXTURE · Stripe 6 rows + GL 6 rows · drift canary = data row 42",
       "amber",
-      "fixtures/stripe_settlements.csv + fixtures/internal_gl.csv"
+      "fixtures/stripe_settlements.csv + fixtures/internal_gl.csv",
+      "Sample batch loaded · " + state.settlements.length + " settlements vs " +
+        state.glEntries.length + " ledger entries"
     );
     /* E2E: render locally *and* queue the batch through the live gateway.
      * row_count is the measured sum of both parsed artifacts (6 + 6). */
@@ -2144,7 +2347,8 @@ body.is-xray::after {
     setStatus(
       "FIXTURE · tfplan.json · orphan 100 GB gp3 + idle provisioned concurrency",
       "amber",
-      "fixtures/tfplan.json"
+      "fixtures/tfplan.json",
+      "Sample plan loaded · " + state.planResources.length + " cloud resources screened"
     );
     dispatchBatch(
       "ZOMBIE_SCAN",
@@ -2161,9 +2365,12 @@ body.is-xray::after {
     state.planTimestamp = "";
     state.source = "none";
     state.dispatched = false;
-    setStatus("AWAITING INGEST — no dataset loaded", "neutral", "none");
+    setStatus("AWAITING INGEST — no dataset loaded", "neutral", "none",
+      "Awaiting settlement batch · no dataset loaded");
     els.ingestMeta.textContent = "SOURCE: — · PARSER: RFC4180 / JSON · TRANSPORT: local file only";
     setAck("TYPE: — · DATASET: — · ROWS: 0 · TRANSPORT: POST /ingest → SQS", "neutral");
+    setPayload(null);
+    setReceiptFoot("AWAITING FIRST LIVE RESPONSE", "neutral");
     probeLiveApi();
     setApp("reconciler");
   }
@@ -2244,7 +2451,10 @@ body.is-xray::after {
   setTheme("enterprise");
   setXray(false);
   setApp("reconciler");
-  setStatus("AWAITING INGEST — no dataset loaded", "neutral", "none");
+  setStatus("AWAITING INGEST — no dataset loaded", "neutral", "none",
+    "Awaiting settlement batch · no dataset loaded");
+  setPayload(null);
+  setReceiptFoot("AWAITING FIRST LIVE RESPONSE", "neutral");
   probeLiveApi();
 })();
 </script>
