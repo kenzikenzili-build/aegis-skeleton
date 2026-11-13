@@ -16,7 +16,7 @@
 - [ ] **CloudFormation IAM Unblock**: Resolve EC2 role permissions to allow direct SAM deployment or configure GitHub Actions deployment runner.
 - [ ] **Live REST Endpoint**: Expose API Gateway HTTP POST endpoint for `/reconcile` and `/smite`.
 - [ ] **Real Telemetry Wiring**: Frontend `fetch()` requests hitting real Lambda and writing to DynamoDB with verifiable `200 OK` network calls.
-- [ ] **Deep MCP Toolchain**: Implement stdio FinOps MCP server (`mcp/finops_sentry.py`) for AI agent zero-idle auditing.
+- [x] **Deep MCP Toolchain**: Implement stdio FinOps MCP server (`mcp/finops_sentry.py`) for AI agent zero-idle auditing — `scan_terraform_plan` parses `fixtures/tfplan.json` and prices orphaned EBS, NAT gateways and idle provisioned concurrency in `Decimal` (17/17 `--dry-run` checks; `tests/test_phantom_guard_finops.py`).
 
 ---
 

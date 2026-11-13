@@ -79,8 +79,8 @@
           },
           "ledger_amount": {
             "$ref": "#/definitions/money",
-            "description": "PLANNED (x-implemented: false). Internal GL amount for the same transaction when the producer holds both sides. Enables the MATCHED transition. Ignored by the handler at this commit.",
-            "x-implemented": false
+            "description": "Internal GL amount for the same transaction when the producer holds both sides. When present it is quantised to cents and compared exactly against amount: equal + SUCCESS -> SETTLED, equal + non-success -> MATCHED, non-zero -> FLAGGED_DISCREPANCY.",
+            "x-implemented": true
           }
         }
       }
@@ -94,12 +94,12 @@
       "PENDING": {
         "terminal": false,
         "implemented": false,
-        "description": "Awaiting settlement and a ledger match. NOT persisted as such today: reconcile_transaction maps a PENDING input to FLAGGED_DISCREPANCY."
+        "description": "Awaiting settlement and a ledger match. Still never persisted: a PENDING input without a ledger_amount maps to FLAGGED_DISCREPANCY, and a PENDING input whose ledger_amount matches exactly maps to MATCHED."
       },
       "MATCHED": {
         "terminal": false,
-        "implemented": false,
-        "description": "Both sides agree on the amount (exact Decimal variance of 0.00) but settlement is not yet confirmed. No code path produces this state at this commit."
+        "implemented": true,
+        "description": "Both sides agree on the amount (exact cent match, Decimal variance of 0.00) but settlement is not yet confirmed (status is not SUCCESS). Produced by evaluate_transaction since this commit."
       },
       "SETTLED": {
         "terminal": true,
@@ -109,7 +109,7 @@
       "FLAGGED_DISCREPANCY": {
         "terminal": false,
         "implemented": true,
-        "description": "Needs review: a non-success status, or (planned) a non-zero Decimal variance. Recoverable: a later corrected event may move the record to MATCHED or SETTLED."
+        "description": "Needs review: a non-success status, or a non-zero Decimal variance (PRECISION_DRIFT inside ±$0.02, VARIANCE_EXCEEDS_TOLERANCE beyond it). Recoverable: a later corrected event may move the record to MATCHED or SETTLED."
       }
     },
     "transitions": [
@@ -118,17 +118,18 @@
         "from": "PENDING",
         "to": "MATCHED",
         "trigger": "reconciliation event with status PENDING and ledger_amount present",
-        "guard": "Decimal(amount) - Decimal(ledger_amount) == Decimal('0.00')",
-        "implemented": false
+        "guard": "Decimal(ledger_amount) - Decimal(amount) == Decimal('0.00')",
+        "implemented": true,
+        "notes": "apps/grim-reconciler/reconciler.py::evaluate_transaction; variance is ledger - settlement, matched to the console."
       },
       {
         "id": "T2",
         "from": "PENDING",
         "to": "SETTLED",
         "trigger": "reconciliation event with status SUCCESS",
-        "guard": "ledger_amount absent, or Decimal(amount) - Decimal(ledger_amount) == Decimal('0.00')",
-        "implemented": "partial",
-        "notes": "The handler settles on status == SUCCESS alone; it never compares amounts."
+        "guard": "ledger_amount absent, or Decimal(ledger_amount) - Decimal(amount) == Decimal('0.00')",
+        "implemented": true,
+        "notes": "A SUCCESS event whose ledger side differs is no longer settled: it becomes FLAGGED_DISCREPANCY."
       },
       {
         "id": "T3",
@@ -136,7 +137,8 @@
         "to": "SETTLED",
         "trigger": "reconciliation event with status SUCCESS",
         "guard": "variance == Decimal('0.00')",
-        "implemented": false
+        "implemented": "partial",
+        "notes": "The decision is derived from the event, not read from the prior row; PutItem overwrite moves the same key to SETTLED."
       },
       {
         "id": "T4",
@@ -144,8 +146,8 @@
         "to": "FLAGGED_DISCREPANCY",
         "trigger": "reconciliation event with status FAILED, or ledger_amount present with a non-zero Decimal variance",
         "guard": "status != 'SUCCESS' or variance != Decimal('0.00')",
-        "implemented": "partial",
-        "notes": "Today any status other than SUCCESS (including PENDING) flags a discrepancy. The variance guard is not evaluated."
+        "implemented": true,
+        "notes": "Non-zero variance flags with PRECISION_DRIFT when |variance| <= $0.02, VARIANCE_EXCEEDS_TOLERANCE otherwise."
       },
       {
         "id": "T5",
@@ -175,9 +177,9 @@
       {
         "id": "SM-3",
         "statement": "Variance is computed and compared as decimal.Decimal only. The canary is fixtures/internal_gl.csv row index 42, whose variance must be exactly Decimal('-0.02').",
-        "enforcement": "Rule 4; AST Smite Guard rule AEGIS-FLOAT; fixture canary",
-        "implemented": "partial",
-        "notes": "Amounts are quantised with Decimal on write. The variance comparison itself is not implemented in the handler."
+        "enforcement": "Rule 4; AST Smite Guard rule AEGIS-FLOAT; fixture canary; tests/test_grim_reconciler_decimal.py",
+        "implemented": true,
+        "notes": "money_text() quantises to whole cents with ROUND_HALF_UP and variance = ledger - settlement is compared exactly; the 100-row fixture pair yields 99 SETTLED rows and the -0.02 canary."
       }
     ]
   },
@@ -280,16 +282,16 @@
         "variance": {
           "type": "string",
           "pattern": "^-?\\d+\\.\\d{2}$",
-          "description": "PLANNED (x-implemented: false). Decimal(amount) - Decimal(ledger_amount) as a two-decimal string.",
-          "x-implemented": false
+          "description": "Decimal(ledger_amount) - Decimal(amount) as a two-decimal string; present only when the producer supplied ledger_amount.",
+          "x-implemented": true
         }
       }
     }
   },
   "knownDeviations": [
-    "PENDING and MATCHED are specified but never persisted; a PENDING input is stored as FLAGGED_DISCREPANCY.",
+    "PENDING is never persisted: a non-success event without a matching ledger side is stored as FLAGGED_DISCREPANCY.",
     "SETTLED is not protected: PutItem has no ConditionExpression, so a later non-success event overwrites it.",
-    "Variance is not computed by the handler; row-42 drift detection currently happens only in frontend/index.html, in integer cents.",
-    "A payload without transaction_id leaves a stray TX#None row written by the domain handler."
+    "A payload without transaction_id leaves a stray TX#None row written by the domain handler; the core's canonical row still uses the envelope id.",
+    "The domain handler and the core both write the same key, so one reconciliation event costs two PutItem calls."
   ]
 }
