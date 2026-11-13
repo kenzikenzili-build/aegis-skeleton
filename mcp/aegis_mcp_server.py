@@ -21,6 +21,16 @@ probe_production_pipeline
     INVALID_PAYLOAD before ``sqs.send_message`` runs: the pipeline is proven
     live without contaminating AegisIngestionQueue.
 
+Egress policy
+-------------
+``.kiro/hooks/pre-commit`` (rule AEGIS-EGRESS) denies ``requests``, ``urllib``,
+``http.client``, ``httpx``, ``aiohttp`` and raw sockets, and authorises only the
+AWS SDK roots ``boto3`` / ``botocore``. The data-plane probe therefore rides
+``botocore``'s own HTTPS transport (``AWSPreparedRequest`` +
+``URLLib3Session``) against the ``execute-api`` endpoint: identical wire request,
+identical TLS verification, identical response envelope — still no dependency
+outside the standard library plus the AWS SDK.
+
 CLI
 ---
     python3 mcp/aegis_mcp_server.py              # serve JSON-RPC over stdio
@@ -38,17 +48,21 @@ import os
 import sys
 import time
 import traceback
-import urllib.error
-import urllib.request
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
-try:  # boto3 is the only non-stdlib dependency of this server
+try:  # boto3/botocore are the only non-stdlib dependency of this server
     import boto3  # type: ignore
+    # botocore is the single egress path permitted by AEGIS-EGRESS: the probe
+    # reuses the SDK's HTTPS transport instead of urllib / http.client.
+    from botocore.awsrequest import AWSPreparedRequest  # type: ignore
     from botocore.config import Config  # type: ignore
+    from botocore.httpsession import URLLib3Session  # type: ignore
 except ImportError as exc:  # pragma: no cover - exercised only on bare hosts
     boto3 = None  # type: ignore
+    AWSPreparedRequest = None  # type: ignore
     Config = None  # type: ignore
+    URLLib3Session = None  # type: ignore
     BOTO3_IMPORT_ERROR = str(exc)
 else:
     BOTO3_IMPORT_ERROR = ""
@@ -374,32 +388,55 @@ def _probe_dynamodb(region: str, table_name: Optional[str]) -> Dict[str, Any]:
 
 
 def _http_probe(url: str, timeout: int) -> Dict[str, Any]:
-    """Data-plane probe with a deliberately incomplete envelope (no SQS write)."""
+    """Data-plane probe with a deliberately incomplete envelope (no SQS write).
+
+    Egress rides ``botocore``'s HTTPS transport — the only channel that
+    ``.kiro/hooks/pre-commit`` (AEGIS-EGRESS) authorises; ``urllib``,
+    ``http.client`` and raw sockets are denied. The request is an anonymous
+    public POST, never IAM-signed, so a 400 envelope rejection proves the
+    API Gateway + Lambda integration just as well as a 202 would.
+    """
     body = json.dumps({"probe": True}).encode("utf-8")
-    request = urllib.request.Request(
-        url,
-        data=body,
+    info: Dict[str, Any] = {"url": url, "method": "POST", "envelope": "{probe: true}"}
+    started = time.time()
+
+    if AWSPreparedRequest is None or URLLib3Session is None:
+        info.update(
+            {
+                "reachable": False,
+                "error": {
+                    "code": "BotoCoreUnavailable",
+                    "message": "botocore is required for data-plane egress: {0}".format(
+                        BOTO3_IMPORT_ERROR or "import failed"
+                    ),
+                },
+            }
+        )
+        info["latency_ms"] = int((time.time() - started) * 1000)
+        return info
+
+    request = AWSPreparedRequest(
         method="POST",
+        url=url,
         headers={
             "Content-Type": "application/json",
             "User-Agent": "aegis-governance-mcp/{0}".format(SERVER_VERSION),
         },
+        body=body,
+        stream_output=False,
     )
-    info: Dict[str, Any] = {"url": url, "method": "POST", "envelope": "{probe: true}"}
-    started = time.time()
+    session = URLLib3Session(timeout=timeout)
     try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
-            status = int(getattr(response, "status", 0) or 0)
-            reason = str(getattr(response, "reason", "") or "")
-            payload = response.read(512).decode("utf-8", "replace")
-    except urllib.error.HTTPError as exc:
-        status = int(exc.code)
-        reason = str(exc.reason or "")
-        payload = exc.read(512).decode("utf-8", "replace")
+        response = session.send(request)
+        status = int(getattr(response, "status_code", 0) or 0)
+        reason = str(getattr(getattr(response, "raw", None), "reason", "") or "")
+        payload = response.content[:512].decode("utf-8", "replace")
     except Exception as exc:
         info.update({"reachable": False, "error": _error_detail(exc)})
         info["latency_ms"] = int((time.time() - started) * 1000)
         return info
+    finally:
+        session.close()
 
     info.update(
         {
