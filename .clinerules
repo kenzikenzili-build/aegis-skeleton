@@ -1,0 +1,174 @@
+# AEGIS // SKELETON — Cline Rules
+
+> **Precedence:** `.kiro/steering/zero-idle-constitution.md` → `docs/MILESTONES.md` → this file.
+> Never loosen a rule here; only tighten. If a rule conflicts with the constitution, the
+> constitution wins and this file must be corrected in the same change.
+>
+> **Scope:** this file governs every UI change in `frontend/index.html` and any future
+> `frontend/` asset. It merges the imported SaaS design system with the repository's
+> zero-mock, zero-idle and surgical-scope guardrails.
+
+---
+
+## 0. Imported sources (verified 2026-11-13)
+
+The rules below were extracted from these sibling repositories, not invented:
+
+| Source | What was extracted |
+| :--- | :--- |
+| `../base-saas-template/.clinerules` | Zero tech debt, fail-loud errors, surgical 1–3 file whitelist, verification obligation, `Proceed` gate for irreversible commands |
+| `../base-saas-template/AGENTS.md` | Decoupled-by-default, runtime schema gate, reporting format, violation handling |
+| `../lab01-project-alpha-sentinel/docs/DESIGN_BRAND_ASSET.md` | Dual-theme colour architecture, hairline borders, elevation ladder, typography scale, tabular numbers, Apple-grade polish, banned nomenclature, WCAG/theme acceptance |
+| `../lab01-project-alpha-sentinel/.clinerules` | dev-first branching, commit ⇄ issue linkage, no silent widening of gates |
+| `../tlm-nodemesh/.clinerules` | Implementation integrity: no stubs, no mocks, no fake delays, unimplemented paths fail loudly |
+
+When a future sync changes one of those sources, update this file and cite the source path
+plus the date in the change description.
+
+---
+
+## 1. Dual-theme architecture (hard requirement)
+
+The UI ships **two complete themes** driven by a single `data-theme` attribute on `<html>`:
+
+- **`enterprise` (default, light):** Apple / iPhone + Stripe FinTech feel.
+  - Canvas `#F5F5F7` / `#F8FAFC`; never pure `#FFFFFF` as the page background.
+  - Frosted-glass surfaces, crisp `1px` hairlines, soft multi-layered elevation.
+  - Accounting vocabulary: *Payment Reconciliation*, *General Ledger Variance*,
+    *Audit Trail*, *Processed Volume*, *Flagged Discrepancies*.
+- **`kiroween` (toggleable, dark):** Paladin vs. Zombie hackathon mode.
+  - Obsidian canvas `#09090B`; arcane violet (`#A78BFA`) and emerald (`#34D399`) accents.
+  - Thematic truth-only badges: *Paladin AST Guard Active*, *Zombie Resources Flagged*.
+  - Dark Bento cards suitable for the hackathon demo video.
+
+Rules:
+
+1. All colours must resolve through CSS custom properties declared under
+   `:root[data-theme="enterprise"]` and `:root[data-theme="kiroween"]`.
+   Never hardcode `#fff`, `#000`, `bg-white` or `bg-black` in component rules.
+2. The switcher must be a tactile iOS-style pill in the top navigation, must update
+   instantly (no reload), and must set `aria-selected` correctly.
+3. Theme copy differences use `.only-enterprise` / `.only-kiroween`; do not duplicate
+   whole sections.
+4. Theme switching must not persist to `localStorage`, `sessionStorage` or IndexedDB.
+   The repository's `.kiro/hooks/pre-commit` blocks client-side fake persistence.
+5. Both themes must pass a visual audit: no black-on-black collapse, no glaring pure
+   white, no contrast ratio below WCAG AA for body copy.
+
+---
+
+## 2. Typography
+
+| Role | Font | Weight / treatment |
+| :--- | :--- | :--- |
+| UI + body | `-apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, "Segoe UI"` | 400–600, `-webkit-font-smoothing: antialiased` |
+| Display / headings | `Inter, -apple-system, "SF Pro Display"` | 600–700, `letter-spacing: -0.02em` |
+| Kiroween headings | `Space Grotesk` | 600–700, uppercase, `letter-spacing: 0.035em` |
+| Code + all money/tabular data | `JetBrains Mono, ui-monospace, SFMono-Regular, Menlo` | 500–700 |
+
+Hard rules:
+
+1. Every number, currency, percentage, timestamp, PK/SK and row count uses
+   `font-variant-numeric: tabular-nums` and `font-feature-settings: "tnum" 1, "lnum" 1`.
+   Figures never shift horizontally when values update.
+2. Financial figures are **right-aligned**. Labels sit left, values right.
+3. Currency keeps a fixed scale: four decimals for per-hour burn (`$0.0000/hr`),
+   two decimals for ledger amounts (`$17.66`). Never trim trailing zeros.
+4. Type scale: KPI `clamp(23px, 2.2vw, 31px)`; card metric `23px`; table body `12.5px`;
+   table header `10px` uppercase; kicker `10–10.5px` with `0.1em` tracking.
+5. No more than three font families in one view. No decorative or handwritten fonts.
+
+---
+
+## 3. Spacing, radii and elevation
+
+- Base spacing unit: **4px**. Component gaps use the 4/8/12/14/18/24 ladder.
+- Section gap: `14px`. Card padding: `16px 18px`. Dropzone padding: `22px 24px`.
+- Radii: cards `18px` (`--radius-xl`), inner panels `14px`, controls `10px`, toggles
+  and badges `999px`. Never exceed `18px` on a Bento card; never use sharp corners
+  except in an explicit trading-terminal surface.
+- Hairline borders: `1px` at `rgba(15,23,42,0.08)` (light) or
+  `rgba(167,139,250,0.18)` (Kiroween). Borders carry structure; shadows only add depth.
+- Elevation: at rest one micro contact shadow + one mid diffusion shadow; hover adds
+  a long ambient shadow. Never a single heavy black drop shadow; never a coloured
+  blue halo in the enterprise theme.
+
+---
+
+## 4. Glassmorphism / Apple polish
+
+- `.bento` uses `backdrop-filter: blur(24px) saturate(170%)` plus the `-webkit-` prefix.
+- Sticky top navigation uses `blur(28px) saturate(180%)` and a translucent token
+  (`--topbar`), not a solid colour.
+- Glass requires a fallback: `background` must already be legible before blur is applied.
+- Hover/press micro-interactions: `transform: translateY(-1px)` on pills, `-2px` on KPI
+  cards, `scale(0.99)` on press. Durations `140–300ms` with
+  `cubic-bezier(0.22,0.61,0.36,1)`.
+- Respect `prefers-reduced-motion: reduce`: transitions and animations collapse to
+  `0.01ms`, scroll behaviour becomes `auto`.
+- Focus states are always visible: `outline: 2px solid var(--accent); outline-offset: 2px`.
+
+---
+
+## 5. Component contracts
+
+1. **KPI Bento grid:** exactly four executive cards — Processed Volume, Flagged
+   Discrepancies, Prevented Cloud Waste, Platform Idle Cost (`$0.00 / hr`).
+   Every value is derived from an ingested artifact; no hardcoded demo number.
+2. **Upload zone:** dashed hairline, frosted inset surface, upload glyph, explicit
+   "local parse · zero mock" badge. Drag-over uses accent tint + ring, never a colour
+   inversion.
+3. **Sample triggers:** pill buttons labelled *Load Stripe vs GL Fixture* and
+   *Load Zombie tfplan.json*, each carrying a `[01]` / `[02]` mono tag.
+4. **AWS receipt banner:** always visible in Zone A and must print the real HTTP result
+   (`202 ACCEPTED`), `message_id`, dataset and measured `row_count`. Never print a
+   success state before the fetch resolves.
+5. **Ledger table:** sticky opaque header, `1px` row separators, right-aligned money and
+   variance, tone classes (`emerald` / `amber` / `rose`) applied from computed status.
+   Empty state names the accepted artifacts and never renders placeholder rows.
+6. **Status badges:** pill with a leading dot, mono 10px uppercase. Tones are semantic:
+   emerald = cleared, amber = precision drift, rose = discrepancy, violet = governance.
+7. **X-Ray mode:** keeps working in both themes; exposes DynamoDB `PK`/`SK`, SQS
+   transport and Kiro AST Smite Guard telemetry. It must never replace or hide the
+   human-readable status permanently.
+
+---
+
+## 6. Zero-mock and live-integration invariants
+
+These are non-negotiable and must survive every redesign:
+
+- `AEGIS_API_INGEST` remains bound to
+  `https://u3geom1dc0.execute-api.us-east-1.amazonaws.com/ingest`.
+- `postJson()`, `probeLiveApi()` and `dispatchBatch()` remain intact and keep the real
+  `POST /ingest` contract (`content-type: application/json`, CORS `mode: "cors"`).
+- Real ingest responses still surface `HTTP 202 ACCEPTED` and the returned `messageId`.
+- File drag-and-drop still parses CSV with RFC 4180 and Terraform plans from JSON.
+- No mock rows, no fake timers, no fabricated success. Missing data renders `—` or `0`,
+  never an invented value.
+- Unimplemented paths fail loudly with a named error; they do not silently succeed.
+- No `localStorage`, `sessionStorage`, IndexedDB or other client-side fake persistence.
+- Money arithmetic stays in integer cents / micro-dollars in the view and
+  `decimal.Decimal` in the reconciler. Never introduce IEEE-754 float money math.
+
+---
+
+## 7. Surgical scope and verification
+
+1. A single task may touch at most **1–3 files**; list the exact whitelist before editing.
+   Current approved whitelist for this redesign: `frontend/index.html`, `.clinerules`.
+2. Do not reformat, rename or refactor files outside the whitelist.
+3. Before claiming completion, run and report:
+   - `node --check` on the extracted `<script>` (exit code `0` required).
+   - `python3 .kiro/hooks/pre-commit --all` (0 violations).
+   - An ID-preservation check proving every element referenced by JS still exists.
+4. Deploy only through the documented command:
+   `aws s3 sync frontend/ s3://aegis-skeleton-ui-1793421864/ --delete`
+   and then read back the object metadata.
+5. Git flow: work on `dev`, commit with a conventional message, push `origin dev`,
+   then fast-forward `main` with `git push origin dev:main`. Never force-push, never
+   bypass or weaken a hook, never push directly while checked out on `main`.
+6. Report in the required format: `✅ 完成 / ⚠️ 部分完成 / ⛔ 已阻擋（紅線）/ ❓ 待決策`,
+   with executed commands, exit codes and evidence. Unverified claims must be labelled
+   `unverified`.
+
