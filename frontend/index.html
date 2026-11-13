@@ -903,6 +903,21 @@ body.is-xray::after {
 }
 
 /* --------------------------------------------------------------------------
+   Module context — one workspace, two accounting surfaces.
+   GrimReconciler (financial GL) and PhantomGuard (cloud FinOps) re-label the
+   KPI grid, the upload zone, the primary quick-load action and the receipt.
+   `.is-hidden` gates the inactive quick-load pill without ever removing it
+   from the DOM, so its click listener and X-Ray copy stay bound and the
+   active module always exposes exactly one primary action.
+   -------------------------------------------------------------------------- */
+.is-hidden { display: none !important; }
+.ingest-hint-tech { margin-left: 5px; }
+.kpi-label,
+.dropzone-kicker,
+.dropzone-title,
+.ingest-kicker { transition: color 0.18s var(--ease); }
+
+/* --------------------------------------------------------------------------
    Responsive + reduced motion
    -------------------------------------------------------------------------- */
 @media (max-width: 1180px) {
@@ -996,31 +1011,31 @@ body.is-xray::after {
 
   <!-- ======================= EXECUTIVE KPI BENTO GRID ======================= -->
   <section class="kpi-grid" aria-label="Executive key performance indicators">
-    <article class="bento kpi-card is-accent">
+    <article class="bento kpi-card is-accent" id="kpi-card-volume">
       <div class="kpi-head">
-        <span class="kpi-label">Processed Volume</span>
-        <span class="kpi-glyph" aria-hidden="true">&#9672;</span>
+        <span class="kpi-label" id="kpi-label-volume">Processed Volume</span>
+        <span class="kpi-glyph" id="kpi-glyph-volume" aria-hidden="true">&#9672;</span>
       </div>
       <p class="kpi-value num" id="kpi-volume">$0.00</p>
       <p class="kpi-note" id="kpi-volume-note">0 records &middot; STRIPE 0 / GL 0 / TFPLAN 0</p>
     </article>
 
-    <article class="bento kpi-card is-rose">
+    <article class="bento kpi-card is-rose" id="kpi-card-flagged">
       <div class="kpi-head">
-        <span class="kpi-label">Flagged Discrepancies</span>
-        <span class="kpi-glyph" aria-hidden="true">&#9873;</span>
+        <span class="kpi-label" id="kpi-label-flagged">Flagged Discrepancies</span>
+        <span class="kpi-glyph" id="kpi-glyph-flagged" aria-hidden="true">&#9873;</span>
       </div>
       <p class="kpi-value num" id="kpi-flagged">0</p>
       <p class="kpi-note" id="kpi-flagged-note">0 precision drift &middot; 0 reconciled rows</p>
     </article>
 
-    <article class="bento kpi-card is-amber">
+    <article class="bento kpi-card is-emerald" id="kpi-card-precision">
       <div class="kpi-head">
-        <span class="kpi-label">Prevented Cloud Waste</span>
-        <span class="kpi-glyph" aria-hidden="true">&#10693;</span>
+        <span class="kpi-label" id="kpi-label-precision">Precision Guard</span>
+        <span class="kpi-glyph" id="kpi-glyph-precision" aria-hidden="true">&#9878;</span>
       </div>
-      <p class="kpi-value num" id="kpi-waste">$0.0000</p>
-      <p class="kpi-note" id="kpi-waste-note">no tfplan ingested &middot; 0 resources flagged</p>
+      <p class="kpi-value num" id="kpi-waste">&mdash;</p>
+      <p class="kpi-note" id="kpi-waste-note">no reconciliation rows &middot; &plusmn;$0.02 tolerance</p>
     </article>
 
     <article class="bento kpi-card is-emerald">
@@ -1045,17 +1060,14 @@ body.is-xray::after {
           </svg>
         </span>
         <div>
-          <span class="dropzone-kicker">Accounting Upload</span>
-          <h2 class="dropzone-title" id="ingest-heading">Drop settlement or Terraform artifacts</h2>
+          <span class="dropzone-kicker" id="ingest-kicker">ACCOUNTING &amp; LEDGER UPLOAD</span>
+          <h2 class="dropzone-title" id="ingest-heading">Drop Stripe settlement or General Ledger CSVs</h2>
         </div>
-        <span class="dropzone-badge tech-inline">LOCAL PARSE &middot; ZERO MOCK</span>
+        <span class="dropzone-badge">LOCAL PARSE &middot; ZERO MOCK</span>
       </div>
       <p class="dropzone-hint" id="ingest-hint">
-        Drop <code>stripe_settlements.csv</code>, <code>internal_gl.csv</code> or
-        <code>tfplan.json</code> &mdash; or click to browse.
-        <span class="business-inline">Settlements are matched against the ledger inside this browser session.</span>
-        <span class="tech-inline">Files are parsed locally with an RFC&nbsp;4180 / JSON reader; only <code>dataset</code> and the measured <code>row_count</code> are POSTed to <code>/ingest</code>.</span>
-        Nothing is invented.
+        <span id="ingest-hint-copy">Drop <code>stripe_settlements.csv</code> and <code>internal_gl.csv</code> &mdash; or click to browse.</span>
+        <span class="tech-inline ingest-hint-tech" id="ingest-hint-technical">Files are parsed locally with an RFC&nbsp;4180 / JSON reader; only <code>dataset</code> and the measured <code>row_count</code> are POSTed to <code>/ingest</code>.</span>
       </p>
       <div class="pill-row">
         <button type="button" class="pill" id="load-stripe">
@@ -1063,7 +1075,7 @@ body.is-xray::after {
           <span class="business-inline">Run Sample Settlement Audit</span>
           <span class="xray-copy">Load Stripe vs GL Fixture</span>
         </button>
-        <button type="button" class="pill" id="load-tfplan">
+        <button type="button" class="pill is-hidden" id="load-tfplan">
           <span class="pill-tag tech-inline">02</span>
           <span class="business-inline">Run Sample Cloud Waste Scan</span>
           <span class="xray-copy">Load Zombie tfplan.json</span>
@@ -1072,11 +1084,11 @@ body.is-xray::after {
       <input type="file" id="file-input" class="sr-only" accept=".csv,.json,text/csv,application/json" multiple>
     </div>
 
-    <aside class="ingest-panel receipt" aria-label="Ingest gateway receipt">
+    <aside class="ingest-panel receipt" id="receipt-panel" aria-label="Settlement gateway receipt">
       <div class="receipt-head">
         <span class="ingest-kicker">
-          <span class="business-inline">Settlement Gateway Receipt</span>
-          <span class="xray-copy">AWS Ingest Receipt</span>
+          <span class="business-inline" id="receipt-title">SETTLEMENT GATEWAY RECEIPT</span>
+          <span class="xray-copy" id="receipt-title-xray">AWS INGEST RECEIPT</span>
         </span>
         <span class="badge badge-neutral tech-inline">POST /ingest</span>
         <span class="badge badge-emerald business-inline">HTTPS &middot; SECURE CHANNEL</span>
@@ -1374,6 +1386,50 @@ body.is-xray::after {
     dispatched: false
   };
 
+  /* ---------------------------------------------------------------------------
+   * Module context table. GrimReconciler (financial GL) and PhantomGuard (cloud
+   * FinOps) share one workspace, so every surface that *names* the active module
+   * reads its copy here: upload zone, receipt title, ledger empty state and the
+   * three contextual KPI cards. Only labels and gates live in this table —
+   * every figure stays derived from the ingested artifacts, never from copy.
+   * ------------------------------------------------------------------------ */
+  var MODULE_COPY = {
+    reconciler: {
+      uploadKicker: "ACCOUNTING & LEDGER UPLOAD",
+      uploadHeading: "Drop Stripe settlement or General Ledger CSVs",
+      uploadHint: "Drop <code>stripe_settlements.csv</code> and <code>internal_gl.csv</code> &mdash; or click to browse.",
+      uploadTech: "Files are parsed locally with an RFC 4180 / JSON reader; only dataset and the measured row_count are POSTed to /ingest.",
+      receiptTitle: "SETTLEMENT GATEWAY RECEIPT",
+      receiptTitleXray: "AWS INGEST RECEIPT",
+      receiptLabel: "Settlement gateway receipt",
+      emptyTitle: "AWAITING SETTLEMENT DATA",
+      emptyBody: "Drop <code>stripe_settlements.csv</code> + <code>internal_gl.csv</code> " +
+        "&mdash; or run the sample settlement audit.",
+      kpis: [
+        { label: "Processed Volume", glyph: "◎", tone: "is-accent" },
+        { label: "Flagged Discrepancies", glyph: "⚑", tone: "is-rose" },
+        { label: "Precision Guard", glyph: "⚖", tone: "is-emerald" }
+      ]
+    },
+    finops: {
+      uploadKicker: "TERRAFORM & FINOPS UPLOAD",
+      uploadHeading: "Drop Terraform execution plan (tfplan.json)",
+      uploadHint: "Audit cloud infrastructure plans before deployment to block idle NAT gateways " +
+        "and unattached EBS volumes.",
+      uploadTech: "tfplan.json is parsed locally through the planned_values tree; only dataset and the measured row_count are POSTed to /ingest.",
+      receiptTitle: "FINOPS SCANNER RECEIPT",
+      receiptTitleXray: "FINOPS SCAN RECEIPT",
+      receiptLabel: "FinOps scanner receipt",
+      emptyTitle: "AWAITING TERRAFORM PLAN",
+      emptyBody: "Drop <code>tfplan.json</code> &mdash; or run the sample cloud waste scan.",
+      kpis: [
+        { label: "Scanned Cloud Resources", glyph: "☁", tone: "is-accent" },
+        { label: "Zombie Resources Flagged", glyph: "⚑", tone: "is-rose" },
+        { label: "Prevented Cloud Waste", glyph: "⧅", tone: "is-emerald" }
+      ]
+    }
+  };
+
   var els = {
     tabs: Array.prototype.slice.call(document.querySelectorAll(".app-tab")),
     xrayToggle: document.getElementById("xray-toggle"),
@@ -1385,6 +1441,22 @@ body.is-xray::after {
     kpiFlaggedNote: document.getElementById("kpi-flagged-note"),
     kpiWaste: document.getElementById("kpi-waste"),
     kpiWasteNote: document.getElementById("kpi-waste-note"),
+    kpiCardVolume: document.getElementById("kpi-card-volume"),
+    kpiCardFlagged: document.getElementById("kpi-card-flagged"),
+    kpiCardPrecision: document.getElementById("kpi-card-precision"),
+    kpiLabelVolume: document.getElementById("kpi-label-volume"),
+    kpiLabelFlagged: document.getElementById("kpi-label-flagged"),
+    kpiLabelPrecision: document.getElementById("kpi-label-precision"),
+    kpiGlyphVolume: document.getElementById("kpi-glyph-volume"),
+    kpiGlyphFlagged: document.getElementById("kpi-glyph-flagged"),
+    kpiGlyphPrecision: document.getElementById("kpi-glyph-precision"),
+    uploadKicker: document.getElementById("ingest-kicker"),
+    uploadHeading: document.getElementById("ingest-heading"),
+    uploadHintCopy: document.getElementById("ingest-hint-copy"),
+    uploadHintTech: document.getElementById("ingest-hint-technical"),
+    receiptPanel: document.getElementById("receipt-panel"),
+    receiptTitle: document.getElementById("receipt-title"),
+    receiptTitleXray: document.getElementById("receipt-title-xray"),
     zombieBadge: document.getElementById("zombie-badge"),
     dropzone: document.getElementById("dropzone"),
     fileInput: document.getElementById("file-input"),
@@ -1829,14 +1901,15 @@ body.is-xray::after {
 
   function renderLedger(rows) {
     els.ledgerBody.textContent = "";
+    var copy = MODULE_COPY[state.app] || MODULE_COPY.reconciler;
     if (!rows.length) {
+      /* Module-specific empty state: the reconciler never advertises a plan
+         drop and PhantomGuard never advertises CSV settlements. */
       var emptyRow = document.createElement("tr");
       emptyRow.className = "row-empty";
       var cell = document.createElement("td");
       cell.colSpan = tableColumns().length;
-      cell.innerHTML = "<strong>NO DATA INGESTED</strong><br>" +
-        "Drop <code>stripe_settlements.csv</code> + <code>internal_gl.csv</code> or " +
-        "<code>tfplan.json</code>, or use a quick-load pill above.";
+      cell.innerHTML = "<strong>" + copy.emptyTitle + "</strong><br>" + copy.emptyBody;
       emptyRow.appendChild(cell);
       els.ledgerBody.appendChild(emptyRow);
       return;
@@ -1906,9 +1979,28 @@ body.is-xray::after {
       : "no plan ingested · 0 / 0 resources flagged · steady-state burn $0.0000/hr";
   }
 
+  /* Switch the whole workspace context with the module tab: upload kicker,
+   * heading, hint and the single primary quick-load action, plus the receipt
+   * card title. The inactive pill stays in the DOM (its listener and X-Ray
+   * copy remain bound) and is only gated with `.is-hidden`, so exactly one
+   * primary action is ever reachable per module. */
+  function applyModuleContext() {
+    var copy = MODULE_COPY[state.app] || MODULE_COPY.reconciler;
+    if (els.uploadKicker) { els.uploadKicker.textContent = copy.uploadKicker; }
+    if (els.uploadHeading) { els.uploadHeading.textContent = copy.uploadHeading; }
+    if (els.uploadHintCopy) { els.uploadHintCopy.innerHTML = copy.uploadHint; }
+    if (els.uploadHintTech) { els.uploadHintTech.textContent = copy.uploadTech; }
+    if (els.receiptTitle) { els.receiptTitle.textContent = copy.receiptTitle; }
+    if (els.receiptTitleXray) { els.receiptTitleXray.textContent = copy.receiptTitleXray; }
+    if (els.receiptPanel) { els.receiptPanel.setAttribute("aria-label", copy.receiptLabel); }
+    if (els.loadStripe) { els.loadStripe.classList.toggle("is-hidden", state.app === "finops"); }
+    if (els.loadTfplan) { els.loadTfplan.classList.toggle("is-hidden", state.app !== "finops"); }
+  }
+
   function render() {
     var rows = currentRows();
     var finops = state.app === "finops";
+    applyModuleContext();
     renderTableHead();
     renderLedger(rows);
     renderManifest(rows);
@@ -1933,11 +2025,12 @@ body.is-xray::after {
     renderKpis(rows);
   }
 
-  /* Executive KPI Bento grid. Every figure is derived from the artifacts that
-   * were actually ingested: volume is the integer-cent sum of Stripe gross
-   * amounts, flagged counts come from the rendered reconciliation rows, and
-   * cloud waste comes from the PhantomGuard idle-burn meter. Nothing here is
-   * a hardcoded demo number. */
+  /* Executive KPI Bento grid — contextual per module. Every figure is derived
+   * from the artifacts that were actually ingested: GrimReconciler shows the
+   * integer-cent Stripe gross volume, the rendered discrepancy count and the
+   * cleared-row precision rate; PhantomGuard shows the scanned resource count,
+   * the flagged zombie count and the blocked idle burn. Card 4 (Platform Idle
+   * Cost) is frozen at $0.00/hr. Nothing here is a hardcoded demo number. */
   function renderKpis(rows) {
     if (!els.kpiVolume) { return; }
     var volumeCents = 0;
@@ -1950,30 +2043,71 @@ body.is-xray::after {
     });
 
     var recordCount = state.settlements.length + state.glEntries.length + state.planResources.length;
+    var cleared = 0;
     var drift = 0;
     var critical = 0;
     rows.forEach(function (row) {
-      if (row.statusTone === "rose") critical += 1;
+      if (row.statusTone === "emerald") cleared += 1;
       else if (row.statusTone === "amber") drift += 1;
+      else if (row.statusTone === "rose") critical += 1;
     });
-    var flagged = drift + critical;
     var finops = finopsMetrics();
+    var copy = MODULE_COPY[state.app] || MODULE_COPY.reconciler;
 
-    els.kpiVolume.textContent = centsToUsd(volumeCents);
-    els.kpiVolumeNote.textContent = recordCount + (recordCount === 1 ? " record" : " records") +
-      " · STRIPE " + state.settlements.length + " / GL " + state.glEntries.length +
-      " / TFPLAN " + state.planResources.length;
-    els.kpiFlagged.textContent = String(flagged);
-    if (els.kpiFlaggedNote) {
-      els.kpiFlaggedNote.textContent = drift + " precision drift · " + critical +
-        " critical · " + rows.length + " reconciled rows";
+    if (state.app === "finops") {
+      /* PhantomGuard: cards 1-3 describe the scanned plan, never the ledger. */
+      els.kpiVolume.textContent = String(finops.total);
+      els.kpiVolumeNote.textContent = finops.total
+        ? "planned resources parsed · " + (state.planTimestamp || "no plan timestamp")
+        : "no tfplan ingested · 0 planned resources";
+      els.kpiFlagged.textContent = String(finops.flagged);
+      if (els.kpiFlaggedNote) {
+        els.kpiFlaggedNote.textContent = finops.total
+          ? finops.flagged + " of " + finops.total + " resources idle-billing"
+          : "no zombie resources flagged";
+      }
+      els.kpiWaste.textContent = microsToUsd(finops.microsPerHour);
+      if (els.kpiWasteNote) {
+        els.kpiWasteNote.textContent = finops.total
+          ? "idle burn blocked per hour · " + finops.flagged + " flagged"
+          : "no tfplan ingested · $0.0000 / hr blocked";
+      }
+    } else {
+      /* GrimReconciler: integer-cent volume, discrepancy count, precision rate.
+         The precision rate is cleared / reconciled rows — a ratio, never money. */
+      var precision = rows.length ? (cleared / rows.length) * 100 : null;
+      els.kpiVolume.textContent = centsToUsd(volumeCents);
+      els.kpiVolumeNote.textContent = recordCount + (recordCount === 1 ? " record" : " records") +
+        " · STRIPE " + state.settlements.length + " / GL " + state.glEntries.length +
+        " / TFPLAN " + state.planResources.length;
+      els.kpiFlagged.textContent = String(drift + critical);
+      if (els.kpiFlaggedNote) {
+        els.kpiFlaggedNote.textContent = drift + " precision drift · " + critical +
+          " critical · " + rows.length + " reconciled rows";
+      }
+      els.kpiWaste.textContent = precision === null ? "—" : precision.toFixed(1) + "%";
+      if (els.kpiWasteNote) {
+        els.kpiWasteNote.textContent = rows.length
+          ? cleared + " of " + rows.length + " rows cleared · tolerance ±$0.02"
+          : "no reconciliation rows · ±$0.02 tolerance";
+      }
     }
-    els.kpiWaste.textContent = microsToUsd(finops.microsPerHour);
-    if (els.kpiWasteNote) {
-      els.kpiWasteNote.textContent = finops.total
-        ? finops.flagged + " / " + finops.total + " planned resources idle-billing"
-        : "no tfplan ingested · 0 resources flagged";
-    }
+
+    /* Cards 1-3 are contextual; card 4 (Platform Idle Cost) is frozen at
+       $0.00/hr because the skeleton is scale-to-zero in both modules. */
+    var cards = [els.kpiCardVolume, els.kpiCardFlagged, els.kpiCardPrecision];
+    var labels = [els.kpiLabelVolume, els.kpiLabelFlagged, els.kpiLabelPrecision];
+    var glyphs = [els.kpiGlyphVolume, els.kpiGlyphFlagged, els.kpiGlyphPrecision];
+    var tones = ["is-accent", "is-rose", "is-amber", "is-emerald"];
+    copy.kpis.forEach(function (kpi, index) {
+      if (labels[index]) { labels[index].textContent = kpi.label; }
+      if (glyphs[index]) { glyphs[index].textContent = kpi.glyph; }
+      var card = cards[index];
+      if (!card) { return; }
+      tones.forEach(function (tone) { card.classList.remove(tone); });
+      card.classList.add(kpi.tone);
+    });
+
     if (els.zombieBadge) {
       els.zombieBadge.textContent = finops.flagged ? "ZOMBIE RESOURCES FLAGGED" : "ZOMBIE SCAN READY";
     }
